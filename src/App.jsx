@@ -7,10 +7,11 @@ import DashboardPage     from './pages/DashboardPage'
 import PipelinePage      from './pages/PipelinePage'
 import ProjectsPage      from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
-import NewProjectPage    from './pages/NewProjectPage'
-import AIPage            from './pages/AIPage'
-import UsersPage         from './pages/UsersPage'
-import Layout            from './components/Layout/Layout'
+import NewProjectPage        from './pages/NewProjectPage'
+import InnovationWizardPage  from './pages/InnovationWizardPage'
+import AIPage                from './pages/AIPage'
+import UsersPage             from './pages/UsersPage'
+import Layout                from './components/Layout/Layout'
 
 function SettingsPage() {
   return (
@@ -31,7 +32,8 @@ function ProtectedRoutes({ currentUser, onLogout }) {
         <Route path="/pipeline"     element={<PipelinePage />}     />
         <Route path="/projects"     element={<ProjectsPage />}     />
         <Route path="/projects/:id" element={<ProjectDetailPage />}/>
-        <Route path="/new"          element={<NewProjectPage />}   />
+        <Route path="/new"          element={<NewProjectPage />}        />
+        <Route path="/wizard"       element={<InnovationWizardPage />}  />
         <Route path="/ai"           element={<AIPage />}           />
         <Route path="/users"        element={<UsersPage />}        />
         <Route path="/settings"     element={<SettingsPage />}     />

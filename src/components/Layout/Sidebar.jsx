@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, GitBranch, FolderOpen, Plus,
-  Bot, Users, Settings, Activity, LogOut, ShieldCheck, User,
+  Bot, Users, Settings, Activity, LogOut, ShieldCheck, User, FlaskConical,
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import clsx from 'clsx'
@@ -10,7 +10,6 @@ const nav = [
   { to: '/',         icon: LayoutDashboard, label: 'Dashboard',    end: true },
   { to: '/pipeline', icon: GitBranch,       label: 'Pipeline'              },
   { to: '/projects', icon: FolderOpen,      label: 'Projectes'             },
-  { to: '/new',      icon: Plus,            label: 'Nou Projecte'          },
   { to: '/ai',       icon: Bot,             label: 'Assistent IA'          },
 ]
 
@@ -63,6 +62,28 @@ export default function Sidebar() {
             <span className="flex-1">{label}</span>
           </NavLink>
         ))}
+
+        {/* Crear innovació (wizard guiat) */}
+        <div className="pt-4">
+          <p className="px-2 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Crear</p>
+          <NavLink to="/wizard"
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
+            }
+          >
+            <FlaskConical size={17} />
+            <span className="flex-1">Nova Innovació</span>
+            <span className="text-xs bg-althaia-100 text-althaia-700 font-bold px-1.5 py-0.5 rounded-full leading-none">4P</span>
+          </NavLink>
+          <NavLink to="/new"
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
+            }
+          >
+            <Plus size={17} />
+            <span className="flex-1">Afegir projecte</span>
+          </NavLink>
+        </div>
 
         {/* Secció admin */}
         {isAdmin && (
