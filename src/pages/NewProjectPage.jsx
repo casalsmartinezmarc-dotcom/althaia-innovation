@@ -14,7 +14,7 @@ const STEPS = [
 ]
 
 const initialForm = {
-  title: '', service: '', description: '', owner_id: 2,
+  title: '', service: '', description: '', owner_name: '',
   impact: { clinical: 5, economic: 5, organizational: 5, patient_exp: 5 },
   technologies: '', ai_related: false, indicators: '',
   current_phase: 1, priority: 'mitja', status: 'active',
@@ -41,7 +41,7 @@ function ScoreSlider({ label, value, onChange }) {
 }
 
 export default function NewProjectPage() {
-  const { addProject, users } = useApp()
+  const { addProject } = useApp()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [step, setStep] = useState(1)
@@ -55,15 +55,18 @@ export default function NewProjectPage() {
   const setImpact = (key, val) => setForm(f => ({ ...f, impact: { ...f.impact, [key]: val } }))
 
   const handleSubmit = () => {
+    if (!form.title.trim()) return
     const project = addProject({
       ...form,
       tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
       budget: Number(form.budget) || 0,
       estimated_roi: 0,
-      team: [form.owner_id],
+      owner_name: form.owner_name || 'Administrador',
+      team: [],
     })
     setSaved(true)
-    setTimeout(() => navigate(`/projects/${project.id}`), 1200)
+    // Redirigeix al workspace del nou projecte
+    setTimeout(() => navigate(`/projects/${project.id}`), 1500)
   }
 
   return (
@@ -115,9 +118,12 @@ export default function NewProjectPage() {
                 </div>
                 <div>
                   <label className="label">Responsable</label>
-                  <select className="input" value={form.owner_id} onChange={e => set('owner_id', Number(e.target.value))}>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                  <input
+                    className="input"
+                    placeholder="Nom del responsable"
+                    value={form.owner_name}
+                    onChange={e => set('owner_name', e.target.value)}
+                  />
                 </div>
               </div>
               <div>
@@ -231,18 +237,33 @@ export default function NewProjectPage() {
               <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resum</p>
                 <p className="text-sm font-semibold text-gray-900">{form.title || '(sense títol)'}</p>
-                <p className="text-xs text-gray-500">{form.service} · {PHASES[form.current_phase - 1]?.icon} {PHASES[form.current_phase - 1]?.name}</p>
+                <p className="text-xs text-gray-500">
+                  {form.service} · {PHASES[form.current_phase - 1]?.icon} {PHASES[form.current_phase - 1]?.name}
+                  {form.owner_name && ` · ${form.owner_name}`}
+                </p>
                 {form.budget && <p className="text-xs text-gray-500">Pressupost: €{Number(form.budget).toLocaleString()}</p>}
               </div>
             </div>
           )}
         </div>
 
+        {/* Banner de confirmació */}
+        {saved && (
+          <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-5 py-3 flex items-center gap-3 animate-slide-in">
+            <Check size={18} className="text-green-500 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-800">Projecte guardat correctament!</p>
+              <p className="text-xs text-green-600">Redirigint al workspace del projecte...</p>
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="flex items-center justify-between mt-5">
           <button
             onClick={() => step > 1 ? setStep(s => s - 1) : navigate('/projects')}
             className="btn-secondary"
+            disabled={saved}
           >
             <ChevronLeft size={15} /> {step > 1 ? 'Anterior' : 'Cancel·lar'}
           </button>
@@ -251,7 +272,10 @@ export default function NewProjectPage() {
                 Següent <ChevronRight size={15} />
               </button>
             : <button onClick={handleSubmit} className="btn-primary" disabled={saved || !form.title}>
-                {saved ? '✅ Guardat!' : <><Save size={15} /> Crear projecte</>}
+                {saved
+                  ? <><Check size={15} /> Guardat!</>
+                  : <><Save size={15} /> Crear projecte</>
+                }
               </button>
           }
         </div>

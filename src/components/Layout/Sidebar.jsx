@@ -1,5 +1,5 @@
-import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, GitBranch, FolderOpen, Plus, Bot, Users, Settings, Activity, ChevronRight } from 'lucide-react'
+import { NavLink } from 'react-router-dom'
+import { LayoutDashboard, GitBranch, FolderOpen, Plus, Bot, Users, Settings, Activity, LogOut } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 
 const nav = [
@@ -16,7 +16,7 @@ const secondary = [
 ]
 
 export default function Sidebar() {
-  const { currentUser, projects, notifications } = useApp()
+  const { currentUser, projects, notifications, onLogout } = useApp()
   const active = projects.filter(p => p.status === 'active').length
 
   return (
@@ -78,18 +78,24 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* User */}
-      <div className="border-t border-gray-100 px-4 py-4">
-        <div className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 rounded-lg p-2 transition-colors">
+      {/* User + Logout */}
+      <div className="border-t border-gray-100 px-4 py-4 space-y-1">
+        <div className="flex items-center gap-3 px-2 py-2">
           <div className="w-8 h-8 rounded-full bg-althaia-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            {currentUser.avatar}
+            AD
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-gray-900 truncate">{currentUser.name}</p>
-            <p className="text-xs text-gray-400 capitalize">{currentUser.role}</p>
+            <p className="text-xs font-semibold text-gray-900 truncate">Administrador</p>
+            <p className="text-xs text-gray-400">admin@althaia.cat</p>
           </div>
-          <ChevronRight size={14} className="text-gray-300 shrink-0" />
         </div>
+        <button
+          onClick={onLogout}
+          className="sidebar-link sidebar-link-inactive w-full text-red-500 hover:bg-red-50 hover:text-red-600"
+        >
+          <LogOut size={15} />
+          <span>Tancar sessió</span>
+        </button>
       </div>
     </aside>
   )

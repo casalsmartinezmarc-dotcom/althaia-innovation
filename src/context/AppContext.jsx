@@ -1,12 +1,43 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { projects as initialProjects, users, globalKPIs, tasks, feedback, pilots, evaluations, phaseHistory, ideas } from '../data/mockData'
+
+const STORAGE_KEY = 'althaia_projects'
+const ALERTS_KEY  = 'althaia_alerts'
+
+function loadProjects() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : initialProjects
+  } catch {
+    return initialProjects
+  }
+}
+
+function loadAlerts() {
+  try {
+    const saved = localStorage.getItem(ALERTS_KEY)
+    return saved ? JSON.parse(saved) : globalKPIs.alerts
+  } catch {
+    return globalKPIs.alerts
+  }
+}
 
 const AppContext = createContext(null)
 
-export function AppProvider({ children }) {
-  const [projects, setProjects]     = useState(initialProjects)
+export function AppProvider({ children, onLogout }) {
+  const [projects, setProjects]     = useState(loadProjects)
   const [currentUser]               = useState(users[1]) // Jordi Puig – Innovació
-  const [notifications, setNotifs]  = useState(globalKPIs.alerts)
+  const [notifications, setNotifs]  = useState(loadAlerts)
+
+  // Persistir projectes a localStorage cada vegada que canvien
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
+  }, [projects])
+
+  // Persistir alertes a localStorage cada vegada que canvien
+  useEffect(() => {
+    localStorage.setItem(ALERTS_KEY, JSON.stringify(notifications))
+  }, [notifications])
 
   const addProject = useCallback((data) => {
     const newProject = {
@@ -41,6 +72,17 @@ export function AppProvider({ children }) {
     )
   }, [])
 
+  const deleteProject = useCallback((id) => {
+    setProjects(prev => prev.filter(p => p.id !== id))
+  }, [])
+
+  const resetToDemo = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(ALERTS_KEY)
+    setProjects(initialProjects)
+    setNotifs(globalKPIs.alerts)
+  }, [])
+
   const dismissAlert = useCallback((id) => {
     setNotifs(prev => prev.filter(a => a.id !== id))
   }, [])
@@ -62,7 +104,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       projects, users, currentUser, notifications,
       globalKPIs,
-      addProject, updateProject, advancePhase, dismissAlert,
+      addProject, updateProject, advancePhase, deleteProject, resetToDemo, dismissAlert, onLogout,
       getProjectById, getProjectsByPhase, getUserById,
       getTasksForProject, getFeedbackForProject,
       getPilotForProject, getEvalForProject,
