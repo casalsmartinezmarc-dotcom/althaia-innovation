@@ -4,11 +4,12 @@ import Layout from '../components/Layout/Layout'
 import { useApp } from '../context/AppContext'
 import { PHASES, PHASE_COLORS, EVALUATION_CRITERIA } from '../data/constants'
 import { PhaseBadge, StatusBadge, TaskStatusBadge, PriorityBadge } from '../components/shared/Badge'
+import Modal from '../components/shared/Modal'
 import {
-  ArrowLeft, ChevronRight, Users, Calendar, Euro,
-  CheckSquare, MessageSquare, FileText, History,
-  FlaskConical, BarChart2, Rocket, TrendingUp,
-  AlertCircle, Clock, Tag, ArrowRight,
+  ArrowLeft, Users, Calendar, Euro,
+  CheckSquare, MessageSquare, History,
+  FlaskConical, BarChart2, TrendingUp,
+  AlertCircle, Clock, Tag, ArrowRight, Trash2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -64,13 +65,19 @@ export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const {
-    getProjectById, getUserById, advancePhase,
+    getProjectById, advancePhase, deleteProject, isAdmin,
     getTasksForProject, getFeedbackForProject,
     getPilotForProject, getEvalForProject,
     getHistoryForProject, getIdeasForProject,
   } = useApp()
+
+  const handleDelete = () => {
+    deleteProject(project.id)
+    navigate('/projects')
+  }
   const project = getProjectById(id)
   const [tab, setTab] = useState('overview')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   if (!project) return (
     <Layout title="Projecte no trobat">
@@ -83,7 +90,6 @@ export default function ProjectDetailPage() {
     </Layout>
   )
 
-  const owner     = getUserById(project.owner_id)
   const phase     = PHASES[project.current_phase - 1]
   const pc        = PHASE_COLORS[project.current_phase]
   const tasks     = getTasksForProject(project.id)
@@ -92,7 +98,7 @@ export default function ProjectDetailPage() {
   const evalRes   = getEvalForProject(project.id)
   const history   = getHistoryForProject(project.id)
   const ideas     = getIdeasForProject(project.id)
-  const teamUsers = project.team?.map(getUserById).filter(Boolean) || []
+  const teamUsers = []
 
   return (
     <Layout title={project.title} subtitle={project.service}>
@@ -102,17 +108,41 @@ export default function ProjectDetailPage() {
           <ArrowLeft size={15} /> Projectes
         </button>
         <div className="flex items-center gap-2">
-          {project.current_phase < 8 && project.status === 'active' && (
+          {isAdmin && (
             <button
-              onClick={() => advancePhase(project.id)}
-              className="btn-primary"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white text-red-600 text-sm font-medium rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
             >
+              <Trash2 size={14} /> Eliminar
+            </button>
+          )}
+          {project.current_phase < 8 && project.status === 'active' && (
+            <button onClick={() => advancePhase(project.id)} className="btn-primary">
               Avançar a {PHASES[project.current_phase]?.name}
               <ArrowRight size={14} />
             </button>
           )}
         </div>
       </div>
+
+      {/* Modal eliminar projecte */}
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Eliminar projecte" size="sm">
+        <div className="flex flex-col items-center text-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+            <Trash2 size={26} className="text-red-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Eliminar «{project.title}»?</p>
+            <p className="text-sm text-gray-500 mt-1">Aquesta acció és irreversible. Totes les dades del projecte es perdran.</p>
+          </div>
+          <div className="flex gap-3 w-full">
+            <button onClick={() => setConfirmDelete(false)} className="btn-secondary flex-1 justify-center">Cancel·lar</button>
+            <button onClick={handleDelete} className="flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors">
+              <Trash2 size={14} /> Eliminar
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Project header card */}
       <div className="card p-5 mb-5">
@@ -141,7 +171,7 @@ export default function ProjectDetailPage() {
           <div className="grid grid-cols-2 gap-3 shrink-0 text-sm">
             <div className="flex items-center gap-2 text-gray-500">
               <Users size={14} className="text-gray-400" />
-              <span>{owner?.name}</span>
+              <span>{project.owner_name || 'No assignat'}</span>
             </div>
             <div className="flex items-center gap-2 text-gray-500">
               <Calendar size={14} className="text-gray-400" />
@@ -248,7 +278,6 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-gray-400 text-center py-8">Sense tasques assignades</p>
               )}
               {tasks.map(t => {
-                const assigned = getUserById(t.assigned_to)
                 return (
                   <div key={t.id} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
                     <div className={clsx(
@@ -260,12 +289,12 @@ export default function ProjectDetailPage() {
                       {t.title}
                     </p>
                     <div className="flex items-center gap-3 shrink-0">
-                      {assigned && (
+                      {t.assigned_to && (
                         <div className="flex items-center gap-1.5 text-xs text-gray-500">
                           <div className="w-5 h-5 rounded-full bg-althaia-100 flex items-center justify-center text-althaia-700 text-xs font-bold">
-                            {assigned.avatar}
+                            {String(t.assigned_to).slice(0,2).toUpperCase()}
                           </div>
-                          <span className="hidden sm:inline">{assigned.name.split(' ')[0]}</span>
+                          <span className="hidden sm:inline">{String(t.assigned_to)}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-1 text-xs text-gray-400">
@@ -418,7 +447,6 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-gray-400 text-center py-8">Sense feedback registrat</p>
               )}
               {fb.map(f => {
-                const user = getUserById(f.user_id)
                 const typeColor = f.type === 'clinical' ? 'bg-blue-50 border-blue-200' :
                                   f.type === 'patient'  ? 'bg-green-50 border-green-200' :
                                                           'bg-gray-50 border-gray-200'
@@ -429,10 +457,10 @@ export default function ProjectDetailPage() {
                   <div key={f.id} className={clsx('border rounded-xl p-4', typeColor)}>
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-xs font-bold text-gray-600 border">
-                        {user ? user.avatar : '?'}
+                        {f.user_id ? '👤' : '?'}
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-gray-800">{user?.name || 'Pacient anònim'}</p>
+                        <p className="text-xs font-semibold text-gray-800">{f.user_id ? `Usuari #${f.user_id}` : 'Pacient anònim'}</p>
                         <p className="text-xs text-gray-400">{f.created_at}</p>
                       </div>
                       <span className={clsx('badge ml-auto text-xs', typeBadge)}>{f.type}</span>

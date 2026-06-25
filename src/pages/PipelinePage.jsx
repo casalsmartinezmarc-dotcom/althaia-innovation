@@ -8,9 +8,6 @@ import clsx from 'clsx'
 
 function ProjectCard({ project }) {
   const navigate = useNavigate()
-  const { getUserById } = useApp()
-  const owner = getUserById(project.owner_id)
-
   return (
     <div
       onClick={() => navigate(`/projects/${project.id}`)}

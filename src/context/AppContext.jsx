@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { projects as initialProjects, users, globalKPIs, tasks, feedback, pilots, evaluations, phaseHistory, ideas } from '../data/mockData'
+import { projects as initialProjects, users as mockUsers, globalKPIs, tasks, feedback, pilots, evaluations, phaseHistory, ideas } from '../data/mockData'
+import { loadUsers, saveUsers, getAllUsers } from '../data/auth'
 
 const STORAGE_KEY = 'althaia_projects'
 const ALERTS_KEY  = 'althaia_alerts'
@@ -8,37 +9,31 @@ function loadProjects() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     return saved ? JSON.parse(saved) : initialProjects
-  } catch {
-    return initialProjects
-  }
+  } catch { return initialProjects }
 }
 
 function loadAlerts() {
   try {
     const saved = localStorage.getItem(ALERTS_KEY)
     return saved ? JSON.parse(saved) : globalKPIs.alerts
-  } catch {
-    return globalKPIs.alerts
-  }
+  } catch { return globalKPIs.alerts }
 }
 
 const AppContext = createContext(null)
 
-export function AppProvider({ children, onLogout }) {
-  const [projects, setProjects]     = useState(loadProjects)
-  const [currentUser]               = useState(users[1]) // Jordi Puig – Innovació
-  const [notifications, setNotifs]  = useState(loadAlerts)
+export function AppProvider({ children, currentUser, onLogout }) {
+  const [projects, setProjects]   = useState(loadProjects)
+  const [notifications, setNotifs] = useState(loadAlerts)
+  const [regUsers, setRegUsers]   = useState(loadUsers) // usuaris registrats (sense admin)
 
-  // Persistir projectes a localStorage cada vegada que canvien
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-  }, [projects])
+  const isAdmin = currentUser?.role === 'admin'
 
-  // Persistir alertes a localStorage cada vegada que canvien
-  useEffect(() => {
-    localStorage.setItem(ALERTS_KEY, JSON.stringify(notifications))
-  }, [notifications])
+  // Persistir a localStorage
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(projects)) }, [projects])
+  useEffect(() => { localStorage.setItem(ALERTS_KEY,  JSON.stringify(notifications)) }, [notifications])
+  useEffect(() => { saveUsers(regUsers) }, [regUsers])
 
+  // ── Projectes ────────────────────────────────────────────────────────────────
   const addProject = useCallback((data) => {
     const newProject = {
       ...data,
@@ -47,11 +42,10 @@ export function AppProvider({ children, onLogout }) {
       updated_at: new Date().toISOString().split('T')[0],
       status: 'active',
       current_phase: data.current_phase || 1,
-      team: [currentUser.id],
     }
     setProjects(prev => [newProject, ...prev])
     return newProject
-  }, [currentUser])
+  }, [])
 
   const updateProject = useCallback((id, updates) => {
     setProjects(prev =>
@@ -62,6 +56,10 @@ export function AppProvider({ children, onLogout }) {
     )
   }, [])
 
+  const deleteProject = useCallback((id) => {
+    setProjects(prev => prev.filter(p => p.id !== id))
+  }, [])
+
   const advancePhase = useCallback((projectId) => {
     setProjects(prev =>
       prev.map(p =>
@@ -70,10 +68,6 @@ export function AppProvider({ children, onLogout }) {
           : p
       )
     )
-  }, [])
-
-  const deleteProject = useCallback((id) => {
-    setProjects(prev => prev.filter(p => p.id !== id))
   }, [])
 
   const resetToDemo = useCallback(() => {
@@ -87,24 +81,44 @@ export function AppProvider({ children, onLogout }) {
     setNotifs(prev => prev.filter(a => a.id !== id))
   }, [])
 
-  const getProjectById = useCallback((id) => projects.find(p => p.id === Number(id)), [projects])
+  // ── Gestió d'usuaris (només admin) ───────────────────────────────────────────
+  const getAllRegisteredUsers = useCallback(() => getAllUsers(), [regUsers])
 
-  const getProjectsByPhase = useCallback((phase) =>
-    projects.filter(p => p.current_phase === phase), [projects])
+  const toggleUserActive = useCallback((userId) => {
+    setRegUsers(prev =>
+      prev.map(u => u.id === userId ? { ...u, active: !u.active } : u)
+    )
+  }, [])
 
-  const getUserById = useCallback((id) => users.find(u => u.id === id), [])
-  const getTasksForProject  = useCallback((id) => tasks[id]  || [], [])
+  const changeUserRole = useCallback((userId, newRole) => {
+    setRegUsers(prev =>
+      prev.map(u => u.id === userId ? { ...u, role: newRole } : u)
+    )
+  }, [])
+
+  const deleteUser = useCallback((userId) => {
+    setRegUsers(prev => prev.filter(u => u.id !== userId))
+  }, [])
+
+  // ── Lookups ───────────────────────────────────────────────────────────────────
+  const getProjectById     = useCallback((id) => projects.find(p => p.id === Number(id)), [projects])
+  const getProjectsByPhase = useCallback((phase) => projects.filter(p => p.current_phase === phase), [projects])
+  const getUserById        = useCallback((id) => mockUsers.find(u => u.id === id), [])
+  const getTasksForProject    = useCallback((id) => tasks[id]    || [], [])
   const getFeedbackForProject = useCallback((id) => feedback[id] || [], [])
-  const getPilotForProject  = useCallback((id) => pilots[id]  || null, [])
-  const getEvalForProject   = useCallback((id) => evaluations[id] || null, [])
-  const getHistoryForProject = useCallback((id) => phaseHistory[id] || [], [])
-  const getIdeasForProject  = useCallback((id) => ideas.filter(i => i.project_id === id), [])
+  const getPilotForProject    = useCallback((id) => pilots[id]   || null, [])
+  const getEvalForProject     = useCallback((id) => evaluations[id] || null, [])
+  const getHistoryForProject  = useCallback((id) => phaseHistory[id] || [], [])
+  const getIdeasForProject    = useCallback((id) => ideas.filter(i => i.project_id === id), [])
 
   return (
     <AppContext.Provider value={{
-      projects, users, currentUser, notifications,
-      globalKPIs,
-      addProject, updateProject, advancePhase, deleteProject, resetToDemo, dismissAlert, onLogout,
+      projects, currentUser, isAdmin, notifications, globalKPIs,
+      addProject, updateProject, deleteProject, advancePhase, resetToDemo, dismissAlert,
+      onLogout,
+      // Gestió usuaris
+      getAllRegisteredUsers, toggleUserActive, changeUserRole, deleteUser,
+      // Lookups
       getProjectById, getProjectsByPhase, getUserById,
       getTasksForProject, getFeedbackForProject,
       getPilotForProject, getEvalForProject,

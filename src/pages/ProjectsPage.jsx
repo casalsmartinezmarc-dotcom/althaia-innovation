@@ -15,7 +15,7 @@ const SORT_OPTIONS = [
 ]
 
 export default function ProjectsPage() {
-  const { projects, getUserById } = useApp()
+  const { projects } = useApp()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [filterPhase, setFilterPhase] = useState('')
@@ -92,7 +92,6 @@ export default function ProjectsPage() {
         {filtered.map(p => {
           const phase = PHASES[p.current_phase - 1]
           const pc = PHASE_COLORS[p.current_phase]
-          const owner = getUserById(p.owner_id)
           const roiK = p.estimated_roi ? `€${Math.round(p.estimated_roi / 1000)}k` : '-'
 
           return (
@@ -114,7 +113,7 @@ export default function ProjectsPage() {
                     <span className="badge bg-violet-100 text-violet-700 text-xs">IA</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 truncate">{p.service} · {owner?.name}</p>
+                <p className="text-xs text-gray-400 truncate">{p.service}{p.owner_name ? ` · ${p.owner_name}` : ''}</p>
               </div>
 
               {/* Meta */}

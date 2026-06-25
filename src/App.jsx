@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
-import LoginPage        from './pages/LoginPage'
-import DashboardPage    from './pages/DashboardPage'
-import PipelinePage     from './pages/PipelinePage'
-import ProjectsPage     from './pages/ProjectsPage'
+import { getSession, clearSession } from './data/auth'
+import LoginPage         from './pages/LoginPage'
+import DashboardPage     from './pages/DashboardPage'
+import PipelinePage      from './pages/PipelinePage'
+import ProjectsPage      from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
-import NewProjectPage   from './pages/NewProjectPage'
-import AIPage           from './pages/AIPage'
-import UsersPage        from './pages/UsersPage'
-import Layout           from './components/Layout/Layout'
+import NewProjectPage    from './pages/NewProjectPage'
+import AIPage            from './pages/AIPage'
+import UsersPage         from './pages/UsersPage'
+import Layout            from './components/Layout/Layout'
 
 function SettingsPage() {
   return (
@@ -22,9 +23,9 @@ function SettingsPage() {
   )
 }
 
-function ProtectedRoutes({ onLogout }) {
+function ProtectedRoutes({ currentUser, onLogout }) {
   return (
-    <AppProvider onLogout={onLogout}>
+    <AppProvider currentUser={currentUser} onLogout={onLogout}>
       <Routes>
         <Route path="/"             element={<DashboardPage />}    />
         <Route path="/pipeline"     element={<PipelinePage />}     />
@@ -41,24 +42,19 @@ function ProtectedRoutes({ onLogout }) {
 }
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(
-    () => sessionStorage.getItem('althaia_auth') === '1'
-  )
+  const [currentUser, setCurrentUser] = useState(() => getSession())
 
-  const handleLogin = () => {
-    sessionStorage.setItem('althaia_auth', '1')
-    setLoggedIn(true)
-  }
+  const handleLogin = (user) => setCurrentUser(user)
 
   const handleLogout = () => {
-    sessionStorage.removeItem('althaia_auth')
-    setLoggedIn(false)
+    clearSession()
+    setCurrentUser(null)
   }
 
   return (
     <BrowserRouter>
-      {loggedIn
-        ? <ProtectedRoutes onLogout={handleLogout} />
+      {currentUser
+        ? <ProtectedRoutes currentUser={currentUser} onLogout={handleLogout} />
         : <Routes>
             <Route path="*" element={<LoginPage onLogin={handleLogin} />} />
           </Routes>
