@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import JSZip from 'jszip'
 import Layout from '../components/Layout/Layout'
 import { useApp } from '../context/AppContext'
 import { SERVICES } from '../data/constants'
@@ -9,447 +8,8 @@ import {
   Wand2, RotateCcw, Eye, X, Loader2,
 } from 'lucide-react'
 import clsx from 'clsx'
-
-// ─── Extracció de text dels documents ─────────────────────────────────────────
-async function extractTextFromDocx(file) {
-  try {
-    const arrayBuffer = await file.arrayBuffer()
-    const zip = await JSZip.loadAsync(arrayBuffer)
-    const docXml = zip.file('word/document.xml')
-    if (!docXml) return null
-    const xml = await docXml.async('string')
-    return xml
-      .replace(/<w:br[^>]*\/>/g, '\n')
-      .replace(/<\/w:p>/g, '\n\n')
-      .replace(/<\/w:tr>/g, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#x27;/g, "'")
-      .replace(/\r\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  } catch {
-    return null
-  }
-}
-
-async function extractTextFromFile(file) {
-  const name = file.name.toLowerCase()
-  if (name.endsWith('.docx')) return extractTextFromDocx(file)
-  if (name.endsWith('.txt') || file.type === 'text/plain') {
-    return new Promise(resolve => {
-      const reader = new FileReader()
-      reader.onload  = e => resolve(e.target.result)
-      reader.onerror = () => resolve(null)
-      reader.readAsText(file, 'UTF-8')
-    })
-  }
-  return null
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MOTOR DE DETECCIÓ — dissenyat per a documents estructurats per seccions
-// (separadors ⸻ / --- / línies en blanc + encapçalament curt)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Divideix el text en seccions {heading, content}.
- * Reconeix separadors: ⸻ ─ — --- *** i títols de secció implícits
- * (línies curtes, soles, seguides de contingut).
- */
-function parseSections(text) {
-  // 1. Dividim per separadors visuals explícits
-  const rawParts = text.split(/\n[⸻─—\-]{2,}\n/g)
-
-  const sections = []
-
-  rawParts.forEach(part => {
-    const trimmed = part.trim()
-    if (!trimmed) return
-
-    // 2. Dins de cada part, busquem sub-seccions implícites:
-    //    línia curta sola (≤60 car) seguida d'almenys 2 línies de contingut
-    const lines = trimmed.split('\n')
-    let currentHeading = ''
-    let currentContent = []
-
-    lines.forEach((line, i) => {
-      const t = line.trim()
-      const isShortAlone = t.length > 0 && t.length <= 70 &&
-        !t.startsWith('*') && !t.startsWith('•') && !t.startsWith('-') &&
-        !t.startsWith('↓') && !/^\d+\s/.test(t)
-      const nextHasContent = lines.slice(i + 1, i + 4).some(l => l.trim().length > 5)
-
-      if (isShortAlone && nextHasContent && i > 0) {
-        // Guardem la secció anterior
-        if (currentContent.length > 0) {
-          sections.push({
-            heading: currentHeading.toLowerCase().trim(),
-            headingRaw: currentHeading.trim(),
-            content: currentContent.join('\n').trim(),
-          })
-        }
-        currentHeading = t
-        currentContent = []
-      } else {
-        currentContent.push(line)
-      }
-    })
-
-    // Última secció del part
-    if (currentContent.join('').trim().length > 0) {
-      sections.push({
-        heading: currentHeading.toLowerCase().trim(),
-        headingRaw: currentHeading.trim(),
-        content: currentContent.join('\n').trim(),
-      })
-    }
-  })
-
-  return sections
-}
-
-/**
- * Busca el contingut de la primera secció que coincideixi amb alguna keyword.
- */
-function findSection(sections, keywords) {
-  for (const kw of keywords) {
-    const kwl = kw.toLowerCase()
-    const found = sections.find(s =>
-      s.heading.includes(kwl) || s.heading === kwl
-    )
-    if (found && found.content.trim().length > 5) return found.content.trim()
-  }
-  return ''
-}
-
-/**
- * Retorna el contingut de totes les seccions que coincideixin.
- */
-function findAllSections(sections, keywords) {
-  const results = []
-  for (const kw of keywords) {
-    const kwl = kw.toLowerCase()
-    sections
-      .filter(s => s.heading.includes(kwl))
-      .forEach(s => { if (s.content.trim()) results.push(s.content.trim()) })
-  }
-  return results.join('\n\n')
-}
-
-/**
- * Cerca una expressió regular al text complet i retorna el match.
- */
-function matchText(text, pattern) {
-  const m = text.match(new RegExp(pattern, 'i'))
-  return m?.[1]?.trim() || ''
-}
-
-// ─── Funció principal de detecció ─────────────────────────────────────────────
-function detectFields(text) {
-  if (!text || text.trim().length < 10) return {}
-
-  const sections = parseSections(text)
-  const lines    = text.split('\n').map(l => l.trim()).filter(Boolean)
-
-  // ══ TÍTOL ══════════════════════════════════════════════════════════════════
-  const title = (() => {
-    // 1. Etiqueta explícita
-    const labeled = matchText(text, '(?:títol del repte|títol de la innovació|títol del projecte|nom del projecte|títol)[:\\s]+([^\\n]{3,100})')
-    if (labeled) return labeled
-
-    // 2. Línia en majúscules (nom propi del projecte, ex: CAREVERSE)
-    const upperLine = lines.find(l =>
-      l.length >= 3 && l.length <= 60 &&
-      l === l.toUpperCase() &&
-      /[A-Z]/.test(l) &&
-      !/^[0-9\s\-*•⸻─—↓✔]+$/.test(l)
-    )
-    if (upperLine) return upperLine
-
-    // 3. Subtítol just sota el nom en majúscules (ex: "Plataforma de Bessó Digital...")
-    if (upperLine) {
-      const idx = lines.indexOf(upperLine)
-      const next = lines[idx + 1]
-      if (next && next.length > 10 && next.length <= 120) return `${upperLine} — ${next}`
-    }
-
-    // 4. Primera línia substancial
-    return lines.find(l => l.length >= 8 && l.length <= 100 && !/^[#\-*•⸻]/.test(l)) || ''
-  })()
-
-  // ══ SERVEI ═════════════════════════════════════════════════════════════════
-  const service = (() => {
-    return matchText(text, '(?:servei afectat|servei clínic|servei|departament|unitat clínica|àrea)[:\\s]+([^\\n]{2,80})')
-  })()
-
-  // ══ RESPONSABLE ════════════════════════════════════════════════════════════
-  const owner_name = (() => {
-    // Només si hi ha una etiqueta explícita; en documents de proposta sol estar buit
-    return matchText(text, '(?:responsable del projecte|responsable|referent clínic|referent|autor principal|investigador principal)[:\\s]+([^\\n]{2,80})')
-  })()
-
-  // ══ DESCRIPCIÓ DEL PROBLEMA ════════════════════════════════════════════════
-  const problem_description = (() => {
-    // Seccions semàntiques de "la idea" o "context"
-    const fromSec = findSection(sections, [
-      'la idea', 'el problema', 'problema', 'context', 'introducció',
-      'motivació', 'resum executiu', 'antecedents', 'justificació',
-    ])
-    if (fromSec.length > 40) return fromSec.slice(0, 1000)
-
-    // Etiqueta explícita
-    const labeled = matchText(text, '(?:descripció del problema|descripció de la necessitat|problema detectat|necessitat detectada)[:\\s]*\\n?([\\s\\S]{30,1000}?)(?=\\n\\n)')
-    if (labeled.length > 40) return labeled.slice(0, 1000)
-
-    // Primer paràgraf llarg (>80 chars)
-    const para = text.split(/\n{2,}/).find(p => p.trim().length > 80)
-    return para?.trim().slice(0, 1000) || ''
-  })()
-
-  // ══ PERFIL DE BENEFICIARIS ═════════════════════════════════════════════════
-  const beneficiary_profile = (() => {
-    const fromSec = findSection(sections, [
-      'beneficiaris', 'usuaris finals', 'perfil d\'usuari',
-      'a qui va dirigit', 'persona', 'assistència',
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // Recull totes les seccions d'arquitectura que descriuen actors
-    const actorSec = findAllSections(sections, ['nivell 1', 'nivell 4', 'persona', 'assistència'])
-    if (actorSec.length > 10) return actorSec.slice(0, 500)
-
-    // Extreu línies que mencionen actors clau
-    const actorLines = lines
-      .filter(l => /(?:persona|habitatge|cuidador|infermeri|treball social|familiar|pacient|resident|usuari)/i.test(l))
-      .slice(0, 10).join('\n')
-    return actorLines.slice(0, 500)
-  })()
-
-  // ══ INTENSITAT I RECURRÈNCIA ════════════════════════════════════════════════
-  const recurrence = (() => {
-    const fromSec = findSection(sections, [
-      'intensitat', 'recurrència', 'freqüència', 'volum', 'abast', 'sistema territorial',
-      'nivell 5',
-    ])
-    if (fromSec.length > 5) return fromSec.slice(0, 300)
-
-    // Busca xifres d'escala
-    const scaleMatch = text.match(/([\d.,]+ (?:habitatges?|pacients?|persones?|usuaris?)[^\n.]*)/gi)
-    if (scaleMatch) return scaleMatch.slice(0, 5).join(' · ').slice(0, 300)
-
-    return ''
-  })()
-
-  // ══ ALTERNATIVES EXISTENTS ═════════════════════════════════════════════════
-  const existing_alternatives = (() => {
-    const fromSec = findSection(sections, [
-      'per què és diferencial', 'alternatives', 'situació actual',
-      'avui', 'context actual', 'per què', 'diferencial',
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 400)
-
-    // Busca frases amb "actualment" o "avui dia"
-    const actLines = lines
-      .filter(l => /^(?:actualment|avui|fins ara|la majoria|molts)/i.test(l))
-      .slice(0, 5).join('\n')
-    return actLines.slice(0, 400)
-  })()
-
-  // ══ PRIORITAT ══════════════════════════════════════════════════════════════
-  const priority = (() => {
-    const explicit = matchText(text, '(?:prioritat|priority)[:\\s]*(alta|mitja|mitjana|baixa|high|medium|low)')
-    const map = { alta: 'alta', high: 'alta', mitja: 'mitja', mitjana: 'mitja', medium: 'mitja', baixa: 'baixa', low: 'baixa' }
-    if (explicit) return map[explicit.toLowerCase()] || 'mitja'
-    // Documents de tipus "projecte tractor" → prioritat alta per defecte
-    if (/projecte tractor|tractor|insígnia|referent europeu/i.test(text)) return 'alta'
-    return 'mitja'
-  })()
-
-  // ══ ETIQUETES ══════════════════════════════════════════════════════════════
-  const tags = (() => {
-    const explicit = matchText(text, '(?:etiquetes|paraules clau|tags|keywords|àmbits temàtics)[:\\s]+([^\\n]{3,150})')
-    if (explicit) return explicit
-
-    // Auto-generar des del contingut
-    const kws = []
-    if (/bessó digital|digital twin/i.test(text))        kws.push('Bessó Digital')
-    if (/intel·ligència artificial|\bIA\b|machine learning/i.test(text)) kws.push('IA')
-    if (/IoT|sensor/i.test(text))                        kws.push('IoT')
-    if (/living lab/i.test(text))                        kws.push('Living Lab')
-    if (/cuidador|cures/i.test(text))                    kws.push('Cures')
-    if (/simulaci/i.test(text))                          kws.push('Simulació')
-    if (/robòtic/i.test(text))                           kws.push('Robòtica')
-    if (/salut|clínic|assistencial/i.test(text))         kws.push('Salut')
-    if (/FHIR|HL7|interoperabilitat/i.test(text))        kws.push('Interoperabilitat')
-    if (/predicci|predictiv/i.test(text))                kws.push('IA Predictiva')
-    return kws.join(', ')
-  })()
-
-  // ══ OBJECTIUS ESPECÍFICS ════════════════════════════════════════════════════
-  const objectives = (() => {
-    const fromSec = findSection(sections, [
-      'resultats', 'objectius', 'metes', 'el projecte permetria',
-      'objectiu general', 'objectiu específic', 'finalitat',
-    ])
-    if (fromSec.length > 30) return fromSec.slice(0, 1000)
-
-    // Bullet list de resultats
-    const bMatch = text.match(/(?:el projecte permetria|resultats esperats?|objectius?)\s*[:\n]\s*((?:[*•\-]\s+[^\n]+\n?){2,})/i)
-    return bMatch?.[1]?.trim().slice(0, 1000) || ''
-  })()
-
-  // ══ HIPÒTESI ════════════════════════════════════════════════════════════════
-  const hypotheses = (() => {
-    const fromSec = findSection(sections, ['hipòtesi', 'hipòtesis', 'premissa', 'assumpcions', 'lema'])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // Cerca cita entre cometes (lema del projecte)
-    const quoteMatch = text.match(/["«“]([^"»”\n]{20,300})["»”]/i)
-    if (quoteMatch) return `"${quoteMatch[1].trim()}"`
-
-    // Frase "si X llavors Y"
-    const ifMatch = text.match(/(?:si |before |abans de )[^\n.]{20,200}/i)
-    return ifMatch?.[0]?.trim().slice(0, 500) || ''
-  })()
-
-  // ══ INDICADORS DE MESURA ════════════════════════════════════════════════════
-  const indicators = (() => {
-    const fromSec = findSection(sections, [
-      "motor d'avaluació", 'dashboard executiu', 'indicadors', 'kpi',
-      'mètriques', 'motor avaluació', 'dashboard',
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // Dashboard: KPIs esmentats en llistes
-    const dashLines = lines
-      .filter(l => /(?:KPI|indicador|mètric|disponibilitat|latència|SUS|NPS|satisfacci)/i.test(l))
-      .slice(0, 10).join('\n')
-    return dashLines.slice(0, 500)
-  })()
-
-  // ══ LLINDARS D'ÈXIT ════════════════════════════════════════════════════════
-  const success_criteria = (() => {
-    const fromSec = findSection(sections, [
-      "llindars d'èxit", "criteris d'èxit", "condicions d'èxit",
-      "per què crec", "alineat", "criteris institucionals",
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // Taula de criteris (Necessitat real / Usabilitat / ...)
-    const tableMatch = text.match(/(Necessitat real[\s\S]{10,600}?Escalabilitat[^\n]*)/i)
-    if (tableMatch) return tableMatch[1].trim().slice(0, 500)
-
-    return ''
-  })()
-
-  // ══ PROTOCOL DE PROVES ══════════════════════════════════════════════════════
-  const test_protocol = (() => {
-    const fromSec = findSection(sections, [
-      'cas pràctic', 'protocol', 'metodologia', 'procés',
-      'fases', 'circuit', 'amb careverse', 'pas a pas',
-    ])
-    if (fromSec.length > 30) return fromSec.slice(0, 800)
-
-    // Passos numerats (1 Detecta... ↓ 2 Crea...)
-    const stepsMatch = text.match(/((?:^\d+\s+[^\n]+\n?(?:↓\n?)?){2,})/m)
-    if (stepsMatch) return stepsMatch[1].trim().slice(0, 800)
-
-    return ''
-  })()
-
-  // ══ ESCENARIS DE SIMULACIÓ ══════════════════════════════════════════════════
-  const simulation_scenarios = (() => {
-    const fromSec = findSection(sections, [
-      'escenaris', 'simulació', 'cas pràctic', 'sistema territorial',
-      'nivell 5', 'cas d\'ús',
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // Frases que descriuen un escenari concret
-    const scenarioLines = lines
-      .filter(l => /(?:arriba|suposem|imaginem|escenari|cas:|si una empresa|si un pacient)/i.test(l))
-      .slice(0, 5).join('\n')
-    return scenarioLines.slice(0, 500)
-  })()
-
-  // ══ PRESSUPOST ══════════════════════════════════════════════════════════════
-  const budget = (() => {
-    const m = text.match(/(?:pressupost total|pressupost estimat|cost total|inversió estimada|pressupost)[:\s]*(?:de\s+)?(\d[\d.,\s]*)\s*(?:€|EUR|euros?)?/i)
-    return m ? m[1].replace(/[.,\s](?=\d{3})/g, '').replace(/[^0-9]/g, '') : ''
-  })()
-
-  // ══ PARTNERS / PROVEÏDORS ═══════════════════════════════════════════════════
-  const partners = (() => {
-    const labeled = matchText(text, '(?:partners?|proveïdors?|col·laboradors?|empreses col·laboradores)[:\\s]+([^\\n]{3,200})')
-    if (labeled) return labeled
-
-    // Organitzacions mencionades explícitament
-    const orgMatches = [...text.matchAll(/(?:Fundació|Universitat|Hospital|Institut|Centre|Empresa)\s+[A-ZÁÀÉÈÍÏÓÒÚÜ][^\n,;.]{2,50}/g)]
-    const orgs = [...new Set(orgMatches.map(m => m[0].trim()))]
-    return orgs.slice(0, 5).join(', ')
-  })()
-
-  // ══ RECURSOS NECESSARIS ════════════════════════════════════════════════════
-  const resources = (() => {
-    const fromSec = findSection(sections, [
-      'components', 'recursos', 'tecnologies', 'motors', 'arquitectura',
-      'motor digital twin', 'integració',
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // Tota la secció de components agrupada
-    const allComponents = findAllSections(sections, ['motor', 'repositori', 'dashboard'])
-    if (allComponents.length > 10) return allComponents.slice(0, 500)
-
-    // Menció de tecnologies
-    const techMatch = text.match(/integrac[ió]+\s+d['e]([^\n.]{10,200})/i)
-    return techMatch?.[0]?.trim().slice(0, 500) || ''
-  })()
-
-  // ══ RISCOS IDENTIFICATS ════════════════════════════════════════════════════
-  const risks = (() => {
-    const fromSec = findSection(sections, [
-      'riscos', 'riscs', 'limitacions', 'reptes', 'amenaces',
-    ])
-    if (fromSec.length > 10) return fromSec.slice(0, 500)
-
-    // La secció "IA Predictiva" llista coses que pot predir/detectar = riscos assistencials
-    const predictSec = findSection(sections, ['ia predictiva', 'pot predir', 'predicci'])
-    if (predictSec.length > 10) {
-      return `Riscos assistencials identificats que el sistema detectarà:\n${predictSec}`.slice(0, 500)
-    }
-
-    // Busca frases de risc en el text
-    const riskLines = lines
-      .filter(l => /(?:risc|problema|fallada|dificultat|barrera|limitació|error)/i.test(l))
-      .slice(0, 8).join('\n')
-    return riskLines.slice(0, 500)
-  })()
-
-  // ══ TIMELINE ═══════════════════════════════════════════════════════════════
-  const timeline = (() => {
-    return findSection(sections, ['calendari', 'timeline', 'cronograma', 'pla temporal', 'fases del projecte']).slice(0, 500)
-  })()
-
-  // ══ KPIs FINALS ════════════════════════════════════════════════════════════
-  const kpis = (() => {
-    if (indicators && indicators.length > 20) return indicators
-    return findSection(sections, ['impacte', 'dashboard', 'resultats']).slice(0, 500)
-  })()
-
-  return {
-    title, service, owner_name, problem_description,
-    beneficiary_profile, recurrence, existing_alternatives,
-    objectives, hypotheses, indicators, success_criteria,
-    test_protocol, simulation_scenarios,
-    budget, partners, resources, risks, timeline,
-    priority, tags, kpis,
-  }
-}
+import { runPipeline }           from '../lib/import/Pipeline.js'
+import { isSupported }           from '../lib/import/extractors/index.js'
 
 // ─── Helpers de formulari ─────────────────────────────────────────────────────
 function FieldGroup({ label, detected, children }) {
@@ -496,14 +56,14 @@ export default function ImportProjectPage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
 
-  const [stage, setStage]       = useState('upload')
-  const [loading, setLoading]   = useState(false)
+  const [stage, setStage]           = useState('upload')
+  const [loading, setLoading]       = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
-  const [error, setError]       = useState('')
+  const [error, setError]           = useState('')
   const [pastedText, setPastedText] = useState('')
-  const [fileName, setFileName] = useState('')
+  const [fileName, setFileName]     = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
-  const [detected, setDetected] = useState({})
+  const [detected, setDetected]     = useState({})
 
   const emptyForm = {
     title: '', service: '', owner_name: '', problem_description: '',
@@ -516,64 +76,39 @@ export default function ImportProjectPage() {
   const [form, setForm] = useState(emptyForm)
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const processText = useCallback((text) => {
-    setLoadingMsg('Analitzant el document...')
-    setTimeout(() => {
-      const fields   = detectFields(text)
-      const flags    = {}
-      const newForm  = { ...emptyForm }
-
-      Object.keys(fields).forEach(k => {
-        const v = fields[k]
-        if (v && String(v).length > 0) {
-          newForm[k] = v
-          flags[k]   = true
-        }
-      })
-
+  // ── Core: run the pipeline and apply results ─────────────────────────────
+  const runAnalysis = useCallback(async (input) => {
+    setLoading(true)
+    setError('')
+    try {
+      const { newForm, flags } = await runPipeline(
+        input,
+        emptyForm,
+        msg => setLoadingMsg(msg)
+      )
       setDetected(flags)
       setForm(newForm)
-      setLoading(false)
       setStage('review')
-    }, 700)
+    } catch (err) {
+      setError(err.message || 'Error inesperat. Torna-ho a intentar.')
+      setStage('upload')
+    } finally {
+      setLoading(false)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleFile = useCallback(async (file) => {
     if (!file) return
-    const name  = file.name.toLowerCase()
-    const isPdf  = name.endsWith('.pdf')
-    const isDocx = name.endsWith('.docx')
-    const isTxt  = name.endsWith('.txt') || file.type === 'text/plain'
-
-    if (!isPdf && !isDocx && !isTxt) {
-      setError('Format no suportat. Puja un fitxer .docx, .txt o enganxa el text.')
+    if (!isSupported(file)) {
+      setError('Format no suportat. Puja un fitxer .docx, .pdf o .txt.')
       return
     }
-
     setFileName(file.name)
     setError('')
-    setLoading(true)
-
-    if (isPdf) {
-      setLoading(false)
-      setStage('text')
-      setError('Els PDFs no es llegeixen automàticament. Obre el PDF, selecciona tot el text (Ctrl+A), copia\'l i enganxa\'l aquí sota.')
-      return
-    }
-
     setLoadingMsg(`Llegint ${file.name}...`)
-    const text = await extractTextFromFile(file)
-
-    if (!text || text.trim().length < 20) {
-      setLoading(false)
-      setStage('text')
-      setError('No s\'ha pogut extreure text del fitxer. Enganxa el text manualment.')
-      return
-    }
-
-    processText(text)
-  }, [processText])
+    await runAnalysis(file)
+  }, [runAnalysis])
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
@@ -587,8 +122,8 @@ export default function ImportProjectPage() {
       setError('El text és massa curt. Enganxa el contingut complet del document.')
       return
     }
-    setLoading(true)
-    processText(pastedText.trim())
+    setFileName('')
+    runAnalysis(pastedText.trim())
   }
 
   const handleSave = () => {
@@ -639,9 +174,10 @@ export default function ImportProjectPage() {
           <div>
             <p className="text-sm font-semibold text-blue-800">Importació intel·ligent de documents</p>
             <p className="text-xs text-blue-600 mt-1">
-              Carrega un document Word (.docx) o text (.txt). El motor analitza el document per
-              seccions i detecta automàticament: títol, descripció, objectius, indicadors,
-              protocol, escenaris, alternatives, recursos i riscos. Podràs revisar-ho tot abans de guardar.
+              Carrega un document Word (.docx), PDF (.pdf) o text pla (.txt). El motor analitza
+              el document per seccions i detecta automàticament: títol, descripció, objectius,
+              indicadors, protocol, escenaris, alternatives, recursos i riscos.
+              Podràs revisar-ho tot abans de guardar.
             </p>
           </div>
         </div>
@@ -758,7 +294,7 @@ export default function ImportProjectPage() {
             disabled={pastedText.trim().length < 20 || loading}
             className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
             {loading
-              ? <><Loader2 size={15} className="animate-spin" /> Analitzant...</>
+              ? <><Loader2 size={15} className="animate-spin" /> {loadingMsg || 'Analitzant...'}</>
               : <><Wand2 size={15} /> Detectar camps</>
             }
           </button>
