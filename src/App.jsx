@@ -9,6 +9,7 @@ import ProjectsPage      from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import NewProjectPage        from './pages/NewProjectPage'
 import InnovationWizardPage  from './pages/InnovationWizardPage'
+import ImportProjectPage     from './pages/ImportProjectPage'
 import AIPage                from './pages/AIPage'
 import UsersPage             from './pages/UsersPage'
 import Layout                from './components/Layout/Layout'
@@ -34,6 +35,7 @@ function ProtectedRoutes({ currentUser, onLogout }) {
         <Route path="/projects/:id" element={<ProjectDetailPage />}/>
         <Route path="/new"          element={<NewProjectPage />}        />
         <Route path="/wizard"       element={<InnovationWizardPage />}  />
+        <Route path="/import"       element={<ImportProjectPage />}     />
         <Route path="/ai"           element={<AIPage />}           />
         <Route path="/users"        element={<UsersPage />}        />
         <Route path="/settings"     element={<SettingsPage />}     />

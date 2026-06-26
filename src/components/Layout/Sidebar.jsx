@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, GitBranch, FolderOpen, Plus,
-  Bot, Users, Settings, Activity, LogOut, ShieldCheck, User, FlaskConical,
+  Bot, Users, Settings, Activity, LogOut, ShieldCheck, User, FlaskConical, Upload,
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import clsx from 'clsx'
@@ -73,7 +73,15 @@ export default function Sidebar() {
           >
             <FlaskConical size={17} />
             <span className="flex-1">Nova Innovació</span>
-            <span className="text-xs bg-althaia-100 text-althaia-700 font-bold px-1.5 py-0.5 rounded-full leading-none">4P</span>
+            <span className="text-xs bg-althaia-100 text-althaia-700 font-bold px-1.5 py-0.5 rounded-full leading-none">6P</span>
+          </NavLink>
+          <NavLink to="/import"
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
+            }
+          >
+            <Upload size={17} />
+            <span className="flex-1">Importar document</span>
           </NavLink>
           <NavLink to="/new"
             className={({ isActive }) =>
