@@ -6,7 +6,7 @@ import { useApp } from '../context/AppContext'
 import { SERVICES } from '../data/constants'
 import {
   Upload, FileText, File, AlertCircle, Check,
-  ChevronRight, Wand2, RotateCcw, Eye, X, Loader2,
+  Wand2, RotateCcw, Eye, X, Loader2,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -42,148 +42,404 @@ async function extractTextFromFile(file) {
   if (name.endsWith('.txt') || file.type === 'text/plain') {
     return new Promise(resolve => {
       const reader = new FileReader()
-      reader.onload = e => resolve(e.target.result)
+      reader.onload  = e => resolve(e.target.result)
       reader.onerror = () => resolve(null)
       reader.readAsText(file, 'UTF-8')
     })
   }
-  return null // PDF i altres: cal enganxar el text manualment
+  return null
 }
 
-// ─── Detecció de camps ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOTOR DE DETECCIÓ — dissenyat per a documents estructurats per seccions
+// (separadors ⸻ / --- / línies en blanc + encapçalament curt)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Divideix el text en seccions {heading, content}.
+ * Reconeix separadors: ⸻ ─ — --- *** i títols de secció implícits
+ * (línies curtes, soles, seguides de contingut).
+ */
+function parseSections(text) {
+  // 1. Dividim per separadors visuals explícits
+  const rawParts = text.split(/\n[⸻─—\-]{2,}\n/g)
+
+  const sections = []
+
+  rawParts.forEach(part => {
+    const trimmed = part.trim()
+    if (!trimmed) return
+
+    // 2. Dins de cada part, busquem sub-seccions implícites:
+    //    línia curta sola (≤60 car) seguida d'almenys 2 línies de contingut
+    const lines = trimmed.split('\n')
+    let currentHeading = ''
+    let currentContent = []
+
+    lines.forEach((line, i) => {
+      const t = line.trim()
+      const isShortAlone = t.length > 0 && t.length <= 70 &&
+        !t.startsWith('*') && !t.startsWith('•') && !t.startsWith('-') &&
+        !t.startsWith('↓') && !/^\d+\s/.test(t)
+      const nextHasContent = lines.slice(i + 1, i + 4).some(l => l.trim().length > 5)
+
+      if (isShortAlone && nextHasContent && i > 0) {
+        // Guardem la secció anterior
+        if (currentContent.length > 0) {
+          sections.push({
+            heading: currentHeading.toLowerCase().trim(),
+            headingRaw: currentHeading.trim(),
+            content: currentContent.join('\n').trim(),
+          })
+        }
+        currentHeading = t
+        currentContent = []
+      } else {
+        currentContent.push(line)
+      }
+    })
+
+    // Última secció del part
+    if (currentContent.join('').trim().length > 0) {
+      sections.push({
+        heading: currentHeading.toLowerCase().trim(),
+        headingRaw: currentHeading.trim(),
+        content: currentContent.join('\n').trim(),
+      })
+    }
+  })
+
+  return sections
+}
+
+/**
+ * Busca el contingut de la primera secció que coincideixi amb alguna keyword.
+ */
+function findSection(sections, keywords) {
+  for (const kw of keywords) {
+    const kwl = kw.toLowerCase()
+    const found = sections.find(s =>
+      s.heading.includes(kwl) || s.heading === kwl
+    )
+    if (found && found.content.trim().length > 5) return found.content.trim()
+  }
+  return ''
+}
+
+/**
+ * Retorna el contingut de totes les seccions que coincideixin.
+ */
+function findAllSections(sections, keywords) {
+  const results = []
+  for (const kw of keywords) {
+    const kwl = kw.toLowerCase()
+    sections
+      .filter(s => s.heading.includes(kwl))
+      .forEach(s => { if (s.content.trim()) results.push(s.content.trim()) })
+  }
+  return results.join('\n\n')
+}
+
+/**
+ * Cerca una expressió regular al text complet i retorna el match.
+ */
+function matchText(text, pattern) {
+  const m = text.match(new RegExp(pattern, 'i'))
+  return m?.[1]?.trim() || ''
+}
+
+// ─── Funció principal de detecció ─────────────────────────────────────────────
 function detectFields(text) {
-  if (!text) return {}
+  if (!text || text.trim().length < 10) return {}
 
-  // Helpers
-  const after = (pattern) => {
-    const m = text.match(new RegExp(String(pattern) + '[:\\s]+([^\\n]{3,})', 'i'))
-    return m?.[1]?.trim() || ''
-  }
+  const sections = parseSections(text)
+  const lines    = text.split('\n').map(l => l.trim()).filter(Boolean)
 
-  const afterBlock = (pattern) => {
-    const regex = new RegExp(String(pattern) + '[:\\s]*\\n+([\\s\\S]{10,500}?)(?=\\n\\n|\\n[A-ZÁÀÉÈÍÏÓÒÚÜ\\d]|$)', 'i')
-    const m = text.match(regex)
-    return m?.[1]?.trim() || ''
-  }
+  // ══ TÍTOL ══════════════════════════════════════════════════════════════════
+  const title = (() => {
+    // 1. Etiqueta explícita
+    const labeled = matchText(text, '(?:títol del repte|títol de la innovació|títol del projecte|nom del projecte|títol)[:\\s]+([^\\n]{3,100})')
+    if (labeled) return labeled
 
-  const firstOf = (fns) => {
-    for (const fn of fns) { const v = fn(); if (v && v.length > 3) return v }
+    // 2. Línia en majúscules (nom propi del projecte, ex: CAREVERSE)
+    const upperLine = lines.find(l =>
+      l.length >= 3 && l.length <= 60 &&
+      l === l.toUpperCase() &&
+      /[A-Z]/.test(l) &&
+      !/^[0-9\s\-*•⸻─—↓✔]+$/.test(l)
+    )
+    if (upperLine) return upperLine
+
+    // 3. Subtítol just sota el nom en majúscules (ex: "Plataforma de Bessó Digital...")
+    if (upperLine) {
+      const idx = lines.indexOf(upperLine)
+      const next = lines[idx + 1]
+      if (next && next.length > 10 && next.length <= 120) return `${upperLine} — ${next}`
+    }
+
+    // 4. Primera línia substancial
+    return lines.find(l => l.length >= 8 && l.length <= 100 && !/^[#\-*•⸻]/.test(l)) || ''
+  })()
+
+  // ══ SERVEI ═════════════════════════════════════════════════════════════════
+  const service = (() => {
+    return matchText(text, '(?:servei afectat|servei clínic|servei|departament|unitat clínica|àrea)[:\\s]+([^\\n]{2,80})')
+  })()
+
+  // ══ RESPONSABLE ════════════════════════════════════════════════════════════
+  const owner_name = (() => {
+    // Només si hi ha una etiqueta explícita; en documents de proposta sol estar buit
+    return matchText(text, '(?:responsable del projecte|responsable|referent clínic|referent|autor principal|investigador principal)[:\\s]+([^\\n]{2,80})')
+  })()
+
+  // ══ DESCRIPCIÓ DEL PROBLEMA ════════════════════════════════════════════════
+  const problem_description = (() => {
+    // Seccions semàntiques de "la idea" o "context"
+    const fromSec = findSection(sections, [
+      'la idea', 'el problema', 'problema', 'context', 'introducció',
+      'motivació', 'resum executiu', 'antecedents', 'justificació',
+    ])
+    if (fromSec.length > 40) return fromSec.slice(0, 1000)
+
+    // Etiqueta explícita
+    const labeled = matchText(text, '(?:descripció del problema|descripció de la necessitat|problema detectat|necessitat detectada)[:\\s]*\\n?([\\s\\S]{30,1000}?)(?=\\n\\n)')
+    if (labeled.length > 40) return labeled.slice(0, 1000)
+
+    // Primer paràgraf llarg (>80 chars)
+    const para = text.split(/\n{2,}/).find(p => p.trim().length > 80)
+    return para?.trim().slice(0, 1000) || ''
+  })()
+
+  // ══ PERFIL DE BENEFICIARIS ═════════════════════════════════════════════════
+  const beneficiary_profile = (() => {
+    const fromSec = findSection(sections, [
+      'beneficiaris', 'usuaris finals', 'perfil d\'usuari',
+      'a qui va dirigit', 'persona', 'assistència',
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
+
+    // Recull totes les seccions d'arquitectura que descriuen actors
+    const actorSec = findAllSections(sections, ['nivell 1', 'nivell 4', 'persona', 'assistència'])
+    if (actorSec.length > 10) return actorSec.slice(0, 500)
+
+    // Extreu línies que mencionen actors clau
+    const actorLines = lines
+      .filter(l => /(?:persona|habitatge|cuidador|infermeri|treball social|familiar|pacient|resident|usuari)/i.test(l))
+      .slice(0, 10).join('\n')
+    return actorLines.slice(0, 500)
+  })()
+
+  // ══ INTENSITAT I RECURRÈNCIA ════════════════════════════════════════════════
+  const recurrence = (() => {
+    const fromSec = findSection(sections, [
+      'intensitat', 'recurrència', 'freqüència', 'volum', 'abast', 'sistema territorial',
+      'nivell 5',
+    ])
+    if (fromSec.length > 5) return fromSec.slice(0, 300)
+
+    // Busca xifres d'escala
+    const scaleMatch = text.match(/([\d.,]+ (?:habitatges?|pacients?|persones?|usuaris?)[^\n.]*)/gi)
+    if (scaleMatch) return scaleMatch.slice(0, 5).join(' · ').slice(0, 300)
+
     return ''
-  }
+  })()
 
-  // ── Títol ──
-  const title = firstOf([
-    () => after('(?:títol del repte|títol de la innovació|títol del projecte|nom del projecte|repte|títol)'),
-    () => text.split('\n').find(l => { const t = l.trim(); return t.length >= 8 && t.length <= 100 && !/^[#\-*•]/.test(t) })?.trim(),
-  ])
+  // ══ ALTERNATIVES EXISTENTS ═════════════════════════════════════════════════
+  const existing_alternatives = (() => {
+    const fromSec = findSection(sections, [
+      'per què és diferencial', 'alternatives', 'situació actual',
+      'avui', 'context actual', 'per què', 'diferencial',
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 400)
 
-  // ── Servei ──
-  const serviceRaw = firstOf([
-    () => after('(?:servei afectat|servei clínic|servei|departament|unitat clínica|àrea|area)'),
-  ])
-  const service = SERVICES.find(s => s.toLowerCase().includes(serviceRaw.toLowerCase().split(' ')[0]))
-    || (serviceRaw.length > 2 ? '' : '')
+    // Busca frases amb "actualment" o "avui dia"
+    const actLines = lines
+      .filter(l => /^(?:actualment|avui|fins ara|la majoria|molts)/i.test(l))
+      .slice(0, 5).join('\n')
+    return actLines.slice(0, 400)
+  })()
 
-  // ── Responsable ──
-  const owner_name = firstOf([
-    () => after('(?:responsable del projecte|responsable|referent clínic|referent|professional|autor principal|autor|investigador principal|nom i cognoms)'),
-  ])
+  // ══ PRIORITAT ══════════════════════════════════════════════════════════════
+  const priority = (() => {
+    const explicit = matchText(text, '(?:prioritat|priority)[:\\s]*(alta|mitja|mitjana|baixa|high|medium|low)')
+    const map = { alta: 'alta', high: 'alta', mitja: 'mitja', mitjana: 'mitja', medium: 'mitja', baixa: 'baixa', low: 'baixa' }
+    if (explicit) return map[explicit.toLowerCase()] || 'mitja'
+    // Documents de tipus "projecte tractor" → prioritat alta per defecte
+    if (/projecte tractor|tractor|insígnia|referent europeu/i.test(text)) return 'alta'
+    return 'mitja'
+  })()
 
-  // ── Descripció del problema ──
-  const problem_description = firstOf([
-    () => afterBlock('(?:descripció del problema|descripció de la necessitat|problema detectat|necessitat detectada|context i problema|definició del problema|descripció)'),
-    () => afterBlock('(?:problema|necessitat|context)'),
-  ]).slice(0, 1000)
+  // ══ ETIQUETES ══════════════════════════════════════════════════════════════
+  const tags = (() => {
+    const explicit = matchText(text, '(?:etiquetes|paraules clau|tags|keywords|àmbits temàtics)[:\\s]+([^\\n]{3,150})')
+    if (explicit) return explicit
 
-  // ── Perfil beneficiaris ──
-  const beneficiary_profile = firstOf([
-    () => afterBlock('(?:perfil de persones beneficiàries|persones beneficiàries|beneficiaris|usuaris finals|pacients afectats)'),
-    () => after('(?:beneficiaris|usuaris finals|pacients afectats)'),
-  ]).slice(0, 500)
+    // Auto-generar des del contingut
+    const kws = []
+    if (/bessó digital|digital twin/i.test(text))        kws.push('Bessó Digital')
+    if (/intel·ligència artificial|\bIA\b|machine learning/i.test(text)) kws.push('IA')
+    if (/IoT|sensor/i.test(text))                        kws.push('IoT')
+    if (/living lab/i.test(text))                        kws.push('Living Lab')
+    if (/cuidador|cures/i.test(text))                    kws.push('Cures')
+    if (/simulaci/i.test(text))                          kws.push('Simulació')
+    if (/robòtic/i.test(text))                           kws.push('Robòtica')
+    if (/salut|clínic|assistencial/i.test(text))         kws.push('Salut')
+    if (/FHIR|HL7|interoperabilitat/i.test(text))        kws.push('Interoperabilitat')
+    if (/predicci|predictiv/i.test(text))                kws.push('IA Predictiva')
+    return kws.join(', ')
+  })()
 
-  // ── Recurrència ──
-  const recurrence = firstOf([
-    () => afterBlock('(?:intensitat i recurrència|recurrència|freqüència|intensitat)'),
-    () => after('(?:intensitat i recurrència|recurrència|freqüència|intensitat)'),
-  ]).slice(0, 300)
+  // ══ OBJECTIUS ESPECÍFICS ════════════════════════════════════════════════════
+  const objectives = (() => {
+    const fromSec = findSection(sections, [
+      'resultats', 'objectius', 'metes', 'el projecte permetria',
+      'objectiu general', 'objectiu específic', 'finalitat',
+    ])
+    if (fromSec.length > 30) return fromSec.slice(0, 1000)
 
-  // ── Alternatives ──
-  const existing_alternatives = firstOf([
-    () => afterBlock('(?:solucions alternatives|alternatives existents|alternatives|solucions actuals)'),
-    () => after('(?:alternatives|solucions actuals)'),
-  ]).slice(0, 400)
+    // Bullet list de resultats
+    const bMatch = text.match(/(?:el projecte permetria|resultats esperats?|objectius?)\s*[:\n]\s*((?:[*•\-]\s+[^\n]+\n?){2,})/i)
+    return bMatch?.[1]?.trim().slice(0, 1000) || ''
+  })()
 
-  // ── Objectius ──
-  const objectives = firstOf([
-    () => afterBlock('(?:objectius específics|objectius del projecte|objectius smart|objectius)'),
-    () => afterBlock('(?:objectiu general|objectiu)'),
-  ]).slice(0, 1000)
+  // ══ HIPÒTESI ════════════════════════════════════════════════════════════════
+  const hypotheses = (() => {
+    const fromSec = findSection(sections, ['hipòtesi', 'hipòtesis', 'premissa', 'assumpcions', 'lema'])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
 
-  // ── Hipòtesis ──
-  const hypotheses = firstOf([
-    () => afterBlock('(?:hipòtesis de partida|hipòtesi principal|hipòtesis|hipòtesi)'),
-  ]).slice(0, 500)
+    // Cerca cita entre cometes (lema del projecte)
+    const quoteMatch = text.match(/["«“]([^"»”\n]{20,300})["»”]/i)
+    if (quoteMatch) return `"${quoteMatch[1].trim()}"`
 
-  // ── Indicadors ──
-  const indicators = firstOf([
-    () => afterBlock('(?:indicadors de mesura|indicadors clau|kpis?|indicadors|mètriques)'),
-  ]).slice(0, 500)
+    // Frase "si X llavors Y"
+    const ifMatch = text.match(/(?:si |before |abans de )[^\n.]{20,200}/i)
+    return ifMatch?.[0]?.trim().slice(0, 500) || ''
+  })()
 
-  // ── Llindars d'èxit ──
-  const success_criteria = firstOf([
-    () => afterBlock("(?:llindars d'èxit|criteris d'èxit|condicions d'èxit|criteris de validació|condicions)"),
-  ]).slice(0, 500)
+  // ══ INDICADORS DE MESURA ════════════════════════════════════════════════════
+  const indicators = (() => {
+    const fromSec = findSection(sections, [
+      "motor d'avaluació", 'dashboard executiu', 'indicadors', 'kpi',
+      'mètriques', 'motor avaluació', 'dashboard',
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
 
-  // ── Protocol ──
-  const test_protocol = firstOf([
-    () => afterBlock('(?:protocol de proves|protocol experimental|protocol de test|protocol)'),
-  ]).slice(0, 800)
+    // Dashboard: KPIs esmentats en llistes
+    const dashLines = lines
+      .filter(l => /(?:KPI|indicador|mètric|disponibilitat|latència|SUS|NPS|satisfacci)/i.test(l))
+      .slice(0, 10).join('\n')
+    return dashLines.slice(0, 500)
+  })()
 
-  // ── Escenaris ──
-  const simulation_scenarios = firstOf([
-    () => afterBlock('(?:escenaris de simulació|escenaris de test|escenaris|casos d\'ús)'),
-  ]).slice(0, 500)
+  // ══ LLINDARS D'ÈXIT ════════════════════════════════════════════════════════
+  const success_criteria = (() => {
+    const fromSec = findSection(sections, [
+      "llindars d'èxit", "criteris d'èxit", "condicions d'èxit",
+      "per què crec", "alineat", "criteris institucionals",
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
 
-  // ── Pressupost ──
-  const budgetMatch = text.match(/(?:pressupost total|pressupost estimat|cost total|inversió estimada|pressupost)[:\s]*(?:de\s+)?(\d[\d.,\s]*)\s*(?:€|EUR|euros?)/i)
-  const budget = budgetMatch ? budgetMatch[1].replace(/[.,\s](?=\d{3})/g, '').replace(/[^0-9]/g, '') : ''
+    // Taula de criteris (Necessitat real / Usabilitat / ...)
+    const tableMatch = text.match(/(Necessitat real[\s\S]{10,600}?Escalabilitat[^\n]*)/i)
+    if (tableMatch) return tableMatch[1].trim().slice(0, 500)
 
-  // ── Partners ──
-  const partners = firstOf([
-    () => after("(?:partners|proveïdors|col·laboradors|empreses|entitats col·laboradores)"),
-    () => afterBlock("(?:partners|proveïdors|col·laboradors)"),
-  ]).slice(0, 200)
+    return ''
+  })()
 
-  // ── Recursos ──
-  const resources = firstOf([
-    () => afterBlock('(?:recursos necessaris|recursos humans|recursos)'),
-  ]).slice(0, 500)
+  // ══ PROTOCOL DE PROVES ══════════════════════════════════════════════════════
+  const test_protocol = (() => {
+    const fromSec = findSection(sections, [
+      'cas pràctic', 'protocol', 'metodologia', 'procés',
+      'fases', 'circuit', 'amb careverse', 'pas a pas',
+    ])
+    if (fromSec.length > 30) return fromSec.slice(0, 800)
 
-  // ── Riscos ──
-  const risks = firstOf([
-    () => afterBlock('(?:riscos identificats|riscos i mitigació|riscos|riscs)'),
-  ]).slice(0, 500)
+    // Passos numerats (1 Detecta... ↓ 2 Crea...)
+    const stepsMatch = text.match(/((?:^\d+\s+[^\n]+\n?(?:↓\n?)?){2,})/m)
+    if (stepsMatch) return stepsMatch[1].trim().slice(0, 800)
 
-  // ── Timeline ──
-  const timeline = firstOf([
-    () => afterBlock('(?:calendari d\'implementació|calendari|timeline|cronograma|pla temporal|fases del projecte)'),
-  ]).slice(0, 500)
+    return ''
+  })()
 
-  // ── Prioritat ──
-  const priorityMatch = text.match(/(?:prioritat|priority)[:\s]*(alta|mitja|mitjana|baixa|alta|media|baja|high|medium|low)/i)
-  const priorityMap = { alta: 'alta', high: 'alta', mitja: 'mitja', mitjana: 'mitja', media: 'mitja', medium: 'mitja', baixa: 'baixa', baja: 'baixa', low: 'baixa' }
-  const priority = priorityMap[priorityMatch?.[1]?.toLowerCase()] || 'mitja'
+  // ══ ESCENARIS DE SIMULACIÓ ══════════════════════════════════════════════════
+  const simulation_scenarios = (() => {
+    const fromSec = findSection(sections, [
+      'escenaris', 'simulació', 'cas pràctic', 'sistema territorial',
+      'nivell 5', 'cas d\'ús',
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
 
-  // ── Etiquetes ──
-  const tags = firstOf([
-    () => after("(?:etiquetes|paraules clau|tags|keywords|àmbits temàtics|temes)"),
-  ]).slice(0, 150)
+    // Frases que descriuen un escenari concret
+    const scenarioLines = lines
+      .filter(l => /(?:arriba|suposem|imaginem|escenari|cas:|si una empresa|si un pacient)/i.test(l))
+      .slice(0, 5).join('\n')
+    return scenarioLines.slice(0, 500)
+  })()
 
-  // ── KPIs finals ──
-  const kpis = (indicators && indicators.length > 10) ? indicators : firstOf([
-    () => afterBlock('(?:kpis?|indicadors clau de rendiment)'),
-    () => after('(?:kpis?|indicadors clau)'),
-  ]).slice(0, 500)
+  // ══ PRESSUPOST ══════════════════════════════════════════════════════════════
+  const budget = (() => {
+    const m = text.match(/(?:pressupost total|pressupost estimat|cost total|inversió estimada|pressupost)[:\s]*(?:de\s+)?(\d[\d.,\s]*)\s*(?:€|EUR|euros?)?/i)
+    return m ? m[1].replace(/[.,\s](?=\d{3})/g, '').replace(/[^0-9]/g, '') : ''
+  })()
+
+  // ══ PARTNERS / PROVEÏDORS ═══════════════════════════════════════════════════
+  const partners = (() => {
+    const labeled = matchText(text, '(?:partners?|proveïdors?|col·laboradors?|empreses col·laboradores)[:\\s]+([^\\n]{3,200})')
+    if (labeled) return labeled
+
+    // Organitzacions mencionades explícitament
+    const orgMatches = [...text.matchAll(/(?:Fundació|Universitat|Hospital|Institut|Centre|Empresa)\s+[A-ZÁÀÉÈÍÏÓÒÚÜ][^\n,;.]{2,50}/g)]
+    const orgs = [...new Set(orgMatches.map(m => m[0].trim()))]
+    return orgs.slice(0, 5).join(', ')
+  })()
+
+  // ══ RECURSOS NECESSARIS ════════════════════════════════════════════════════
+  const resources = (() => {
+    const fromSec = findSection(sections, [
+      'components', 'recursos', 'tecnologies', 'motors', 'arquitectura',
+      'motor digital twin', 'integració',
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
+
+    // Tota la secció de components agrupada
+    const allComponents = findAllSections(sections, ['motor', 'repositori', 'dashboard'])
+    if (allComponents.length > 10) return allComponents.slice(0, 500)
+
+    // Menció de tecnologies
+    const techMatch = text.match(/integrac[ió]+\s+d['e]([^\n.]{10,200})/i)
+    return techMatch?.[0]?.trim().slice(0, 500) || ''
+  })()
+
+  // ══ RISCOS IDENTIFICATS ════════════════════════════════════════════════════
+  const risks = (() => {
+    const fromSec = findSection(sections, [
+      'riscos', 'riscs', 'limitacions', 'reptes', 'amenaces',
+    ])
+    if (fromSec.length > 10) return fromSec.slice(0, 500)
+
+    // La secció "IA Predictiva" llista coses que pot predir/detectar = riscos assistencials
+    const predictSec = findSection(sections, ['ia predictiva', 'pot predir', 'predicci'])
+    if (predictSec.length > 10) {
+      return `Riscos assistencials identificats que el sistema detectarà:\n${predictSec}`.slice(0, 500)
+    }
+
+    // Busca frases de risc en el text
+    const riskLines = lines
+      .filter(l => /(?:risc|problema|fallada|dificultat|barrera|limitació|error)/i.test(l))
+      .slice(0, 8).join('\n')
+    return riskLines.slice(0, 500)
+  })()
+
+  // ══ TIMELINE ═══════════════════════════════════════════════════════════════
+  const timeline = (() => {
+    return findSection(sections, ['calendari', 'timeline', 'cronograma', 'pla temporal', 'fases del projecte']).slice(0, 500)
+  })()
+
+  // ══ KPIs FINALS ════════════════════════════════════════════════════════════
+  const kpis = (() => {
+    if (indicators && indicators.length > 20) return indicators
+    return findSection(sections, ['impacte', 'dashboard', 'resultats']).slice(0, 500)
+  })()
 
   return {
     title, service, owner_name, problem_description,
@@ -215,7 +471,9 @@ function FieldGroup({ label, detected, children }) {
 function AutoTextarea({ value, onChange, placeholder, rows = 'h-20', detected }) {
   return (
     <textarea
-      className={clsx('input resize-none text-sm', rows, detected && value && 'border-amber-300 bg-amber-50/30')}
+      className={clsx('input resize-none text-sm', rows,
+        detected && value ? 'border-amber-300 bg-amber-50/30' : ''
+      )}
       placeholder={placeholder} value={value}
       onChange={e => onChange(e.target.value)} />
   )
@@ -224,7 +482,9 @@ function AutoTextarea({ value, onChange, placeholder, rows = 'h-20', detected })
 function AutoInput({ value, onChange, placeholder, detected }) {
   return (
     <input
-      className={clsx('input text-sm', detected && value && 'border-amber-300 bg-amber-50/30')}
+      className={clsx('input text-sm',
+        detected && value ? 'border-amber-300 bg-amber-50/30' : ''
+      )}
       placeholder={placeholder} value={value}
       onChange={e => onChange(e.target.value)} />
   )
@@ -236,55 +496,58 @@ export default function ImportProjectPage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
 
-  const [stage, setStage] = useState('upload') // upload | text | review | done
-  const [loading, setLoading] = useState(false)
+  const [stage, setStage]       = useState('upload')
+  const [loading, setLoading]   = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError]       = useState('')
   const [pastedText, setPastedText] = useState('')
   const [fileName, setFileName] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const [detected, setDetected] = useState({})
-  const [form, setForm] = useState({
+
+  const emptyForm = {
     title: '', service: '', owner_name: '', problem_description: '',
     beneficiary_profile: '', recurrence: '', existing_alternatives: '',
     objectives: '', hypotheses: '', indicators: '', success_criteria: '',
     test_protocol: '', simulation_scenarios: '',
     budget: '', partners: '', resources: '', risks: '', timeline: '',
     priority: 'mitja', tags: '', kpis: '',
-  })
-
+  }
+  const [form, setForm] = useState(emptyForm)
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const processText = useCallback((text) => {
     setLoadingMsg('Analitzant el document...')
     setTimeout(() => {
-      const fields = detectFields(text)
-      const detectedFlags = {}
-      const newForm = { ...form }
+      const fields   = detectFields(text)
+      const flags    = {}
+      const newForm  = { ...emptyForm }
 
       Object.keys(fields).forEach(k => {
-        if (fields[k] && String(fields[k]).length > 0) {
-          newForm[k] = fields[k]
-          detectedFlags[k] = true
+        const v = fields[k]
+        if (v && String(v).length > 0) {
+          newForm[k] = v
+          flags[k]   = true
         }
       })
 
-      setDetected(detectedFlags)
+      setDetected(flags)
       setForm(newForm)
       setLoading(false)
       setStage('review')
-    }, 800)
-  }, [form])
+    }, 700)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleFile = useCallback(async (file) => {
     if (!file) return
-    const name = file.name.toLowerCase()
-    const isPdf = name.endsWith('.pdf')
+    const name  = file.name.toLowerCase()
+    const isPdf  = name.endsWith('.pdf')
     const isDocx = name.endsWith('.docx')
-    const isTxt = name.endsWith('.txt') || file.type === 'text/plain'
+    const isTxt  = name.endsWith('.txt') || file.type === 'text/plain'
 
     if (!isPdf && !isDocx && !isTxt) {
-      setError('Format no suportat. Puja un fitxer .docx, .txt o .pdf.')
+      setError('Format no suportat. Puja un fitxer .docx, .txt o enganxa el text.')
       return
     }
 
@@ -293,10 +556,9 @@ export default function ImportProjectPage() {
     setLoading(true)
 
     if (isPdf) {
-      // PDF: no podem extreure text automàticament sense biblioteca pesada
       setLoading(false)
       setStage('text')
-      setError('Els PDFs no es poden llegir automàticament. Obre el PDF, selecciona tot el text (Ctrl+A), copia\'l i enganxa\'l aquí sota.')
+      setError('Els PDFs no es llegeixen automàticament. Obre el PDF, selecciona tot el text (Ctrl+A), copia\'l i enganxa\'l aquí sota.')
       return
     }
 
@@ -322,7 +584,7 @@ export default function ImportProjectPage() {
 
   const handleManualText = () => {
     if (pastedText.trim().length < 20) {
-      setError('El text és massa curt per analitzar. Enganxa el contingut complet del document.')
+      setError('El text és massa curt. Enganxa el contingut complet del document.')
       return
     }
     setLoading(true)
@@ -342,13 +604,13 @@ export default function ImportProjectPage() {
       impact:        { clinical: 5, economic: 5, organizational: 5, patient_exp: 5 },
       budget:        Number(form.budget || 0),
       estimated_roi: 0,
-
-      // Camps importats
       wizard_activacio: {
         title: form.title, service: form.service, owner_name: form.owner_name,
         problem_description: form.problem_description,
-        beneficiary_profile: form.beneficiary_profile, recurrence: form.recurrence,
-        existing_alternatives: form.existing_alternatives, priority: form.priority, tags: form.tags,
+        beneficiary_profile: form.beneficiary_profile,
+        recurrence: form.recurrence,
+        existing_alternatives: form.existing_alternatives,
+        priority: form.priority, tags: form.tags,
       },
       wizard_experimental: {
         objectives: form.objectives, hypotheses: form.hypotheses,
@@ -367,20 +629,19 @@ export default function ImportProjectPage() {
     setTimeout(() => navigate(`/projects/${project.id}`), 1600)
   }
 
-  // ─── ETAPA: upload ───────────────────────────────────────────────────────────
+  // ─── Stage: upload ───────────────────────────────────────────────────────────
   if (stage === 'upload') return (
     <Layout title="Importar projecte" subtitle="Carrega un document Word, PDF o TXT">
       <div className="max-w-2xl mx-auto space-y-6">
 
-        {/* Info banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
           <Wand2 size={18} className="text-blue-500 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-blue-800">Importació intel·ligent de documents</p>
-            <p className="text-xs text-blue-600 mt-0.5">
-              Carrega un document Word (.docx) o text (.txt) amb la informació del projecte.
-              Detectarem automàticament els camps: títol, descripció, objectius, pressupost, etc.
-              Podràs revisar i corregir tot abans de guardar.
+            <p className="text-xs text-blue-600 mt-1">
+              Carrega un document Word (.docx) o text (.txt). El motor analitza el document per
+              seccions i detecta automàticament: títol, descripció, objectius, indicadors,
+              protocol, escenaris, alternatives, recursos i riscos. Podràs revisar-ho tot abans de guardar.
             </p>
           </div>
         </div>
@@ -393,7 +654,9 @@ export default function ImportProjectPage() {
           onClick={() => fileInputRef.current?.click()}
           className={clsx(
             'border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all',
-            isDragOver ? 'border-althaia-400 bg-althaia-50' : 'border-gray-200 bg-gray-50 hover:border-althaia-300 hover:bg-althaia-50/50'
+            isDragOver
+              ? 'border-althaia-400 bg-althaia-50'
+              : 'border-gray-200 bg-gray-50 hover:border-althaia-300 hover:bg-althaia-50/50'
           )}>
           <input ref={fileInputRef} type="file" accept=".docx,.txt,.pdf" className="hidden"
             onChange={e => handleFile(e.target.files?.[0])} />
@@ -419,8 +682,7 @@ export default function ImportProjectPage() {
                   { icon: File,     label: '.pdf',  color: 'text-red-400 bg-red-50' },
                 ].map(f => (
                   <div key={f.label} className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold', f.color)}>
-                    <f.icon size={14} />
-                    {f.label}
+                    <f.icon size={14} /> {f.label}
                   </div>
                 ))}
               </div>
@@ -435,7 +697,6 @@ export default function ImportProjectPage() {
           </div>
         )}
 
-        {/* O enganxa text */}
         <div className="text-center">
           <button type="button" onClick={() => setStage('text')}
             className="text-sm text-gray-400 hover:text-althaia-600 underline transition-colors">
@@ -446,7 +707,7 @@ export default function ImportProjectPage() {
     </Layout>
   )
 
-  // ─── ETAPA: text (enganxar manualment) ───────────────────────────────────────
+  // ─── Stage: text (enganxar manualment) ───────────────────────────────────────
   if (stage === 'text') return (
     <Layout title="Importar projecte" subtitle="Enganxa el text del document">
       <div className="max-w-2xl mx-auto space-y-5">
@@ -464,8 +725,11 @@ export default function ImportProjectPage() {
             <li>Obre el document Word o PDF</li>
             <li>Selecciona tot el text (Ctrl+A o Cmd+A)</li>
             <li>Copia (Ctrl+C o Cmd+C)</li>
-            <li>Enganxa aquí (Ctrl+V o Cmd+V)</li>
+            <li>Fes clic al camp de sota i enganxa (Ctrl+V o Cmd+V)</li>
           </ol>
+          <p className="text-xs text-blue-500 mt-2">
+            💡 El motor funciona millor quan el document té seccions clarament identificades (títols, encapçalaments).
+          </p>
         </div>
 
         <div>
@@ -479,15 +743,15 @@ export default function ImportProjectPage() {
             )}
           </div>
           <textarea
-            className="input resize-none h-64 font-mono text-xs"
+            className="input resize-none h-72 font-mono text-xs"
             placeholder="Enganxa aquí el text complet del document..."
             value={pastedText}
             onChange={e => setPastedText(e.target.value)} />
-          <p className="text-xs text-gray-400 mt-1">{pastedText.length} caràcters enganxats</p>
+          <p className="text-xs text-gray-400 mt-1">{pastedText.length.toLocaleString()} caràcters</p>
         </div>
 
         <div className="flex items-center justify-between">
-          <button type="button" onClick={() => setStage('upload')} className="btn-secondary">
+          <button type="button" onClick={() => { setStage('upload'); setError('') }} className="btn-secondary">
             ← Tornar
           </button>
           <button type="button" onClick={handleManualText}
@@ -503,7 +767,7 @@ export default function ImportProjectPage() {
     </Layout>
   )
 
-  // ─── ETAPA: review ───────────────────────────────────────────────────────────
+  // ─── Stage: review ───────────────────────────────────────────────────────────
   if (stage === 'review') {
     const detectedCount = Object.values(detected).filter(Boolean).length
 
@@ -511,7 +775,6 @@ export default function ImportProjectPage() {
       <Layout title="Revisió del projecte importat" subtitle="Revisa i corregeix els camps detectats automàticament">
         <div className="max-w-3xl mx-auto space-y-6">
 
-          {/* Header */}
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
             <Eye size={18} className="text-green-600 shrink-0" />
             <div className="flex-1">
@@ -520,15 +783,16 @@ export default function ImportProjectPage() {
                 {fileName && <span className="text-green-600 font-normal"> — {fileName}</span>}
               </p>
               <p className="text-xs text-green-600 mt-0.5">
-                Els camps amb fons groc han estat auto-detectats. Revisa que els valors siguin correctes i corregeix si cal.
+                Els camps en groc han estat detectats automàticament. Revisa'ls i corregeix si cal.
+                Els camps buits els pots omplir manualment.
               </p>
             </div>
-            <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2 py-1 rounded-lg text-xs font-medium">
+            <span className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap">
               <Wand2 size={12} /> Auto-detectat
-            </div>
+            </span>
           </div>
 
-          {/* ── SECCIÓ: Informació bàsica ── */}
+          {/* ── Informació bàsica ── */}
           <div className="card p-6 space-y-4">
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b pb-2">1. Informació bàsica</h3>
 
@@ -539,7 +803,8 @@ export default function ImportProjectPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <FieldGroup label="Servei afectat" detected={detected.service}>
-                <select className="input text-sm" value={form.service} onChange={e => setField('service', e.target.value)}>
+                <select className={clsx('input text-sm', detected.service && form.service ? 'border-amber-300 bg-amber-50/30' : '')}
+                  value={form.service} onChange={e => setField('service', e.target.value)}>
                   <option value="">Selecciona un servei...</option>
                   {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -550,7 +815,7 @@ export default function ImportProjectPage() {
               </FieldGroup>
             </div>
 
-            <FieldGroup label="Descripció del problema *" detected={detected.problem_description}>
+            <FieldGroup label="Descripció del problema / La idea" detected={detected.problem_description}>
               <AutoTextarea value={form.problem_description} onChange={v => setField('problem_description', v)}
                 placeholder="Descripció del problema o necessitat detectada..."
                 rows="h-28" detected={detected.problem_description} />
@@ -563,13 +828,13 @@ export default function ImportProjectPage() {
               </FieldGroup>
               <FieldGroup label="Intensitat i recurrència" detected={detected.recurrence}>
                 <AutoTextarea value={form.recurrence} onChange={v => setField('recurrence', v)}
-                  placeholder="Amb quina freqüència ocorre..." detected={detected.recurrence} />
+                  placeholder="Amb quina freqüència ocorre, quin volum..." detected={detected.recurrence} />
               </FieldGroup>
             </div>
 
-            <FieldGroup label="Alternatives existents" detected={detected.existing_alternatives}>
+            <FieldGroup label="Alternatives existents i per què no son suficients" detected={detected.existing_alternatives}>
               <AutoTextarea value={form.existing_alternatives} onChange={v => setField('existing_alternatives', v)}
-                placeholder="Quines solucions actuals existeixen i per què no son suficients..."
+                placeholder="Quines solucions actuals existeixen i per què son insuficients..."
                 detected={detected.existing_alternatives} />
             </FieldGroup>
 
@@ -587,22 +852,22 @@ export default function ImportProjectPage() {
               </div>
               <FieldGroup label="Etiquetes (separades per comes)" detected={detected.tags}>
                 <AutoInput value={form.tags} onChange={v => setField('tags', v)}
-                  placeholder="Ex: UCI, IA, Alarmes..." detected={detected.tags} />
+                  placeholder="Ex: IA, Living Lab, Cures..." detected={detected.tags} />
               </FieldGroup>
             </div>
           </div>
 
-          {/* ── SECCIÓ: Disseny experimental ── */}
+          {/* ── Disseny experimental ── */}
           <div className="card p-6 space-y-4">
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b pb-2">2. Disseny experimental</h3>
 
-            <FieldGroup label="Objectius específics (SMART) *" detected={detected.objectives}>
+            <FieldGroup label="Objectius específics / Resultats esperats" detected={detected.objectives}>
               <AutoTextarea value={form.objectives} onChange={v => setField('objectives', v)}
                 placeholder="Objectius mesurables del projecte..."
                 rows="h-24" detected={detected.objectives} />
             </FieldGroup>
 
-            <FieldGroup label="Hipòtesis de partida" detected={detected.hypotheses}>
+            <FieldGroup label="Hipòtesi de partida / Lema" detected={detected.hypotheses}>
               <AutoTextarea value={form.hypotheses} onChange={v => setField('hypotheses', v)}
                 placeholder="Hipòtesi principal que es vol verificar..."
                 detected={detected.hypotheses} />
@@ -614,16 +879,16 @@ export default function ImportProjectPage() {
                 detected={detected.indicators} />
             </FieldGroup>
 
-            <FieldGroup label="Llindars d'èxit" detected={detected.success_criteria}>
+            <FieldGroup label="Llindars d'èxit / Criteris de validació" detected={detected.success_criteria}>
               <AutoTextarea value={form.success_criteria} onChange={v => setField('success_criteria', v)}
-                placeholder="Quins resultats mínims cal assolir per considerar-ho exitós..."
+                placeholder="Quins resultats mínims cal assolir..."
                 detected={detected.success_criteria} />
             </FieldGroup>
 
-            <FieldGroup label="Protocol de proves" detected={detected.test_protocol}>
+            <FieldGroup label="Protocol de proves / Cas pràctic" detected={detected.test_protocol}>
               <AutoTextarea value={form.test_protocol} onChange={v => setField('test_protocol', v)}
                 placeholder="Fases del pilot: simulació, experimentació, pilot real..."
-                rows="h-24" detected={detected.test_protocol} />
+                rows="h-28" detected={detected.test_protocol} />
             </FieldGroup>
 
             <FieldGroup label="Escenaris de simulació" detected={detected.simulation_scenarios}>
@@ -633,19 +898,19 @@ export default function ImportProjectPage() {
             </FieldGroup>
           </div>
 
-          {/* ── SECCIÓ: Implementació ── */}
+          {/* ── Disseny de la solució ── */}
           <div className="card p-6 space-y-4">
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide border-b pb-2">3. Disseny de la solució</h3>
 
             <div className="grid grid-cols-2 gap-4">
               <FieldGroup label="Pressupost estimat (€)" detected={detected.budget}>
-                <input className={clsx('input text-sm', detected.budget && form.budget && 'border-amber-300 bg-amber-50/30')}
-                  type="number" min="0" placeholder="Ex: 120000"
+                <input className={clsx('input text-sm', detected.budget && form.budget ? 'border-amber-300 bg-amber-50/30' : '')}
+                  type="number" min="0" placeholder="Ex: 350000"
                   value={form.budget} onChange={e => setField('budget', e.target.value)} />
               </FieldGroup>
               <FieldGroup label="Partners / Proveïdors" detected={detected.partners}>
                 <AutoInput value={form.partners} onChange={v => setField('partners', v)}
-                  placeholder="Ex: Philips, UPC, Telefónica..." detected={detected.partners} />
+                  placeholder="Ex: Fundació TIC Salut, UPC..." detected={detected.partners} />
               </FieldGroup>
             </div>
 
@@ -655,16 +920,16 @@ export default function ImportProjectPage() {
                 detected={detected.kpis} />
             </FieldGroup>
 
-            <FieldGroup label="Recursos necessaris" detected={detected.resources}>
+            <FieldGroup label="Recursos necessaris (equip, infraestructura, dades)" detected={detected.resources}>
               <AutoTextarea value={form.resources} onChange={v => setField('resources', v)}
                 placeholder="Equip humà, infraestructura, accés a dades..."
-                detected={detected.resources} />
+                rows="h-24" detected={detected.resources} />
             </FieldGroup>
 
             <FieldGroup label="Riscos identificats" detected={detected.risks}>
               <AutoTextarea value={form.risks} onChange={v => setField('risks', v)}
-                placeholder="Riscos i plans de mitigació..."
-                detected={detected.risks} />
+                placeholder="Riscos del projecte i plans de mitigació..."
+                rows="h-24" detected={detected.risks} />
             </FieldGroup>
 
             <FieldGroup label="Calendari / Timeline" detected={detected.timeline}>
@@ -677,11 +942,10 @@ export default function ImportProjectPage() {
           {/* Actions */}
           <div className="flex items-center justify-between pb-8">
             <button type="button"
-              onClick={() => { setStage('upload'); setForm({ title: '', service: '', owner_name: '', problem_description: '', beneficiary_profile: '', recurrence: '', existing_alternatives: '', objectives: '', hypotheses: '', indicators: '', success_criteria: '', test_protocol: '', simulation_scenarios: '', budget: '', partners: '', resources: '', risks: '', timeline: '', priority: 'mitja', tags: '', kpis: '' }); setDetected({}) }}
+              onClick={() => { setStage('upload'); setForm(emptyForm); setDetected({}) }}
               className="btn-secondary">
               <RotateCcw size={14} /> Tornar a pujar
             </button>
-
             <button type="button" onClick={handleSave}
               disabled={!form.title.trim()}
               className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
@@ -693,7 +957,7 @@ export default function ImportProjectPage() {
     )
   }
 
-  // ─── ETAPA: done ─────────────────────────────────────────────────────────────
+  // ─── Stage: done ─────────────────────────────────────────────────────────────
   return (
     <Layout title="Projecte importat" subtitle="">
       <div className="max-w-lg mx-auto text-center py-16">
