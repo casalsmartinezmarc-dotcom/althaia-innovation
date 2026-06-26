@@ -24,8 +24,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <KPICard
           label="Projectes actius"
-          value={globalKPIs.active_projects}
-          sub={`de ${globalKPIs.total_projects} totals`}
+          value={projects.filter(p => p.status === 'active').length}
+          sub={`de ${projects.length} totals`}
           icon={FolderOpen} color="blue"
           trend="up" trendVal="+2 vs trim."
           onClick={() => navigate('/projects')}

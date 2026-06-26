@@ -15,6 +15,7 @@ const nav = [
 
 export default function Sidebar() {
   const { currentUser, isAdmin, projects, notifications, onLogout } = useApp()
+  const total  = projects.length
   const active = projects.filter(p => p.status === 'active').length
 
   const initials = currentUser?.name
@@ -40,7 +41,7 @@ export default function Sidebar() {
       {/* Overview chip */}
       <div className="px-4 py-3 border-b border-gray-100">
         <div className="bg-althaia-50 rounded-lg px-3 py-2 flex items-center justify-between">
-          <span className="text-xs text-althaia-700 font-medium">{active} projectes actius</span>
+          <span className="text-xs text-althaia-700 font-medium">{total} projectes · {active} actius</span>
           {notifications.length > 0 && (
             <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none">
               {notifications.length}
