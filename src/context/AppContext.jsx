@@ -27,6 +27,7 @@ export function AppProvider({ children, currentUser, onLogout }) {
   const [notifications,  setNotifs]         = useState(() => loadLS(ALERTS_KEY, globalKPIs.alerts))
   const [regUsers,       setRegUsers]       = useState(loadUsers)
   const [loading,        setLoading]        = useState(true)
+  const [dbWriteError,   setDbWriteError]   = useState(null)
 
   const isAdmin = currentUser?.role === 'admin'
 
@@ -107,7 +108,14 @@ export function AppProvider({ children, currentUser, onLogout }) {
     setProjects(prev => [newProject, ...prev])
     if (supabase) {
       supabase.from('projects').insert(projectToRow(newProject))
-        .then(({ error }) => { if (error) console.error('addProject:', error.message) })
+        .then(({ error }) => {
+          if (error) {
+            console.error('addProject:', error.message, error)
+            setDbWriteError(`Error guardant projecte: ${error.message} (codi: ${error.code})`)
+          } else {
+            setDbWriteError(null)
+          }
+        })
     }
     return newProject
   }, [])
@@ -322,6 +330,7 @@ export function AppProvider({ children, currentUser, onLogout }) {
   return (
     <AppContext.Provider value={{
       projects, currentUser, isAdmin, notifications, globalKPIs, hasDB,
+      dbWriteError, clearDbWriteError: () => setDbWriteError(null),
       addProject, updateProject, deleteProject, advancePhase, resetToDemo, dismissAlert,
       onLogout,
       addTask, updateTask, deleteTask,
