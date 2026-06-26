@@ -12,18 +12,7 @@ import InnovationWizardPage  from './pages/InnovationWizardPage'
 import ImportProjectPage     from './pages/ImportProjectPage'
 import AIPage                from './pages/AIPage'
 import UsersPage             from './pages/UsersPage'
-import Layout                from './components/Layout/Layout'
-
-function SettingsPage() {
-  return (
-    <Layout title="Configuració">
-      <div className="max-w-lg mx-auto card p-8 text-center text-gray-400">
-        <p className="text-4xl mb-4">⚙️</p>
-        <p className="text-sm">Mòdul de configuració en construcció</p>
-      </div>
-    </Layout>
-  )
-}
+import SettingsPage          from './pages/SettingsPage'
 
 function ProtectedRoutes({ currentUser, onLogout }) {
   return (
