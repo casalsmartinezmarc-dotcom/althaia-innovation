@@ -64,6 +64,7 @@ export default function ImportProjectPage() {
   const [fileName, setFileName]     = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const [detected, setDetected]     = useState({})
+  const [usedAI, setUsedAI]         = useState(false)
 
   const emptyForm = {
     title: '', service: '', owner_name: '', problem_description: '',
@@ -81,12 +82,13 @@ export default function ImportProjectPage() {
     setLoading(true)
     setError('')
     try {
-      const { newForm, flags } = await runPipeline(
+      const { newForm, flags, usedAI: ai } = await runPipeline(
         input,
         emptyForm,
         msg => setLoadingMsg(msg)
       )
       setDetected(flags)
+      setUsedAI(ai)
       setForm(newForm)
       setStage('review')
     } catch (err) {
@@ -311,20 +313,29 @@ export default function ImportProjectPage() {
       <Layout title="Revisió del projecte importat" subtitle="Revisa i corregeix els camps detectats automàticament">
         <div className="max-w-3xl mx-auto space-y-6">
 
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-            <Eye size={18} className="text-green-600 shrink-0" />
+          <div className={clsx(
+            'border rounded-xl p-4 flex items-center gap-3',
+            usedAI
+              ? 'bg-purple-50 border-purple-200'
+              : 'bg-green-50 border-green-200'
+          )}>
+            <Eye size={18} className={clsx('shrink-0', usedAI ? 'text-purple-600' : 'text-green-600')} />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-green-800">
+              <p className={clsx('text-sm font-semibold', usedAI ? 'text-purple-900' : 'text-green-800')}>
                 {detectedCount} camps detectats automàticament
-                {fileName && <span className="text-green-600 font-normal"> — {fileName}</span>}
+                {fileName && <span className="font-normal opacity-70"> — {fileName}</span>}
               </p>
-              <p className="text-xs text-green-600 mt-0.5">
-                Els camps en groc han estat detectats automàticament. Revisa'ls i corregeix si cal.
-                Els camps buits els pots omplir manualment.
+              <p className={clsx('text-xs mt-0.5', usedAI ? 'text-purple-700' : 'text-green-600')}>
+                {usedAI
+                  ? 'Extracció feta per Gemini AI — comprèn el context del document. Revisa i corregeix si cal.'
+                  : 'Extracció feta pel motor local (patrons). Revisa els camps i corregeix si cal.'}
               </p>
             </div>
-            <span className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap">
-              <Wand2 size={12} /> Auto-detectat
+            <span className={clsx(
+              'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap',
+              usedAI ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'
+            )}>
+              <Wand2 size={12} /> {usedAI ? 'Gemini AI' : 'Motor local'}
             </span>
           </div>
 

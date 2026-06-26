@@ -1,20 +1,21 @@
 /**
- * Pipeline
- * Single entry-point for the document import flow.
+ * Pipeline — punt d'entrada únic del flux d'importació.
+ *
+ * Estratègia en dos nivells:
+ *   1. Gemini AI  → /api/analyze-document  (necessita GEMINI_API_KEY al backend)
+ *   2. FieldExtractors (regex/patrons)      (fallback offline sempre disponible)
  *
  *   file | rawText
  *       ↓
- *   Extractor.extract()   (WordExtractor / PDFExtractor / TxtExtractor)
+ *   Extractor.extract()      (WordExtractor / PDFExtractor / TxtExtractor)
  *       ↓
- *   parseText()           (TextParser — builds { text, sections, lines })
+ *   parseText()              (TextParser — { text, sections, lines })
  *       ↓
- *   runFieldExtractors()  (all FieldExtractors on the shared parsed object)
+ *   [Gemini API] o [runFieldExtractors()]
  *       ↓
- *   mapToForm()           (MappingEngine — aligns to form shape)
+ *   mapToForm() + autoFill()
  *       ↓
- *   autoFill()            (FormAutoFill — merges with emptyForm)
- *       ↓
- *   { newForm, flags, rawText }
+ *   { newForm, flags, rawText, usedAI }
  */
 
 import { getExtractor }        from './extractors/index.js'
@@ -23,26 +24,52 @@ import { runFieldExtractors }  from './fields/index.js'
 import { mapToForm }           from './MappingEngine.js'
 import { autoFill }            from './FormAutoFill.js'
 
-const MIN_TEXT_LENGTH = 20
+const MIN_TEXT_LENGTH    = 20
+const ANALYZE_API        = '/api/analyze-document'
 
+// ─── Nivell 1: extracció via Gemini AI ────────────────────────────────────────
+async function analyzeWithGemini(text, onProgress) {
+  onProgress('Intel·ligència artificial analitzant el document...')
+  const res = await fetch(ANALYZE_API, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ text }),
+  })
+
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({}))
+    throw new Error(error || `HTTP ${res.status}`)
+  }
+
+  const { fields } = await res.json()
+  if (!fields || typeof fields !== 'object') {
+    throw new Error('Resposta inesperada de la IA')
+  }
+  return fields
+}
+
+// ─── Nivell 2: extracció local (regex / patrons) ──────────────────────────────
+function analyzeWithExtractors(parsed, onProgress) {
+  onProgress('Detectant camps amb el motor local...')
+  return runFieldExtractors(parsed)
+}
+
+// ─── Entrada pública ──────────────────────────────────────────────────────────
 /**
- * Run the full import pipeline on a File or a raw text string.
- *
- * @param {File|string}   input       - A File object or a pasted text string.
- * @param {object}        emptyForm   - The blank form template from ImportProjectPage.
- * @param {Function}      onProgress  - Optional progress callback: (message: string) => void
- * @returns {Promise<{ newForm, flags, rawText }>}
- * @throws {Error} with a user-readable Catalan message on failure.
+ * @param {File|string}   input      - Fitxer o text enganxat manualment
+ * @param {object}        emptyForm  - Plantilla de formulari en blanc
+ * @param {Function}      onProgress - Callback de progrés: (msg: string) => void
+ * @returns {Promise<{ newForm, flags, rawText, usedAI: boolean }>}
  */
 export async function runPipeline(input, emptyForm, onProgress = () => {}) {
   let rawText = ''
 
-  // ── 1. Extract text ───────────────────────────────────────────────────────
+  // ── 1. Extraure text del fitxer ─────────────────────────────────────────────
   if (typeof input === 'string') {
     rawText = input
   } else {
     onProgress('Llegint el document...')
-    const extractor = getExtractor(input)   // throws if unsupported
+    const extractor = getExtractor(input)
     const extracted = await extractor.extract(input, msg => onProgress(msg))
 
     if (!extracted || extracted.trim().length < MIN_TEXT_LENGTH) {
@@ -55,24 +82,29 @@ export async function runPipeline(input, emptyForm, onProgress = () => {}) {
   }
 
   if (rawText.trim().length < MIN_TEXT_LENGTH) {
-    throw new Error(
-      "El text és massa curt. Enganxa el contingut complet del document."
-    )
+    throw new Error('El text és massa curt. Enganxa el contingut complet del document.')
   }
 
-  // ── 2. Parse (shared object — single pass) ───────────────────────────────
-  onProgress('Analitzant l\'estructura del document...')
+  // ── 2. Parse compartit (una sola passada) ───────────────────────────────────
+  onProgress("Processant l'estructura del document...")
   const parsed = parseText(rawText)
 
-  // ── 3. Run all field extractors ───────────────────────────────────────────
-  onProgress('Detectant camps automàticament...')
-  const rawFields = runFieldExtractors(parsed)
+  // ── 3. Extracció de camps: Gemini primer, FieldExtractors de fallback ────────
+  let rawFields
+  let usedAI = false
 
-  // ── 4. Map to form shape ──────────────────────────────────────────────────
+  try {
+    rawFields = await analyzeWithGemini(rawText, onProgress)
+    usedAI    = true
+  } catch (err) {
+    console.warn('[Pipeline] Gemini no disponible, usant extractor local:', err.message)
+    onProgress('Analitzant amb el motor local...')
+    rawFields = analyzeWithExtractors(parsed, onProgress)
+  }
+
+  // ── 4. Mapatge i fusió amb formulari ────────────────────────────────────────
   const { formValues, detected } = mapToForm(rawFields)
+  const { newForm, flags }       = autoFill(formValues, emptyForm)
 
-  // ── 5. Merge with empty form ──────────────────────────────────────────────
-  const { newForm, flags } = autoFill(formValues, emptyForm)
-
-  return { newForm, flags, rawText }
+  return { newForm, flags, rawText, usedAI }
 }
