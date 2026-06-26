@@ -41,7 +41,26 @@ export function AppProvider({ children, currentUser, onLogout }) {
             supabase.from('timeline_events').select('*'),
           ])
           if (pErr) throw pErr
-          setProjects(pData || [])
+
+          // ── Migració automàtica localStorage → Supabase ───────────────────
+          // Si Supabase és buit però localStorage té dades (transició d'estat)
+          // els migrem una sola vegada i esborrem el localStorage per evitar duplicats.
+          let projectsToUse = pData || []
+          if (projectsToUse.length === 0) {
+            const localProjects = loadLS(STORAGE_KEY, [])
+            if (localProjects.length > 0) {
+              console.info(`[AppContext] Migrant ${localProjects.length} projectes de localStorage → Supabase`)
+              const inserts = localProjects.map(p => supabase.from('projects').insert(projectToRow(p)))
+              await Promise.allSettled(inserts)
+              projectsToUse = localProjects
+              // Esborrem localStorage per evitar re-migracions futures
+              localStorage.removeItem(STORAGE_KEY)
+              localStorage.removeItem(TASKS_KEY)
+              localStorage.removeItem(TIMELINE_KEY)
+            }
+          }
+
+          setProjects(projectsToUse)
           setProjectTasks(rowsToTaskMap(tData || []))
           setTimelineEvents(rowsToEventMap(eData || []))
         } catch (err) {
