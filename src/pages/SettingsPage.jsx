@@ -35,6 +35,35 @@ export default function SettingsPage() {
   const [importMsg,     setImportMsg]     = useState(null)
   const [confirmReset,  setConfirmReset]  = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
+  const [dbTest,        setDbTest]        = useState(null)   // null | 'testing' | { ok, msg }
+
+  async function handleDbTest() {
+    if (!supabase) return
+    setDbTest('testing')
+    const testId = Date.now()
+    try {
+      // 1. Test INSERT
+      const { error: insErr } = await supabase.from('projects').insert({
+        id:            testId,
+        title:         '__test_connexió__',
+        current_phase: 1,
+        status:        'active',
+        priority:      'mitja',
+      })
+      if (insErr) { setDbTest({ ok: false, msg: `INSERT fallat: ${insErr.message} (codi: ${insErr.code})` }); return }
+
+      // 2. Test SELECT (llegim el que acabem d'inserir)
+      const { data, error: selErr } = await supabase.from('projects').select('id').eq('id', testId).single()
+      if (selErr || !data) { setDbTest({ ok: false, msg: `INSERT ok però SELECT fallat: ${selErr?.message}` }); return }
+
+      // 3. Test DELETE (netejar)
+      await supabase.from('projects').delete().eq('id', testId)
+
+      setDbTest({ ok: true, msg: 'INSERT + SELECT + DELETE funcionen correctament.' })
+    } catch (err) {
+      setDbTest({ ok: false, msg: `Error inesperat: ${err.message}` })
+    }
+  }
 
   // ── Storage size (localStorage) ───────────────────────────────────────────
   function storageSize(key) {
@@ -218,6 +247,30 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* ── Test d'escriptura Supabase ────────────────────────────────── */}
+        {hasDB && (
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">Test d'escriptura a Supabase</p>
+              <button type="button" onClick={handleDbTest}
+                disabled={dbTest === 'testing'}
+                className="btn-secondary text-xs py-1.5 px-3">
+                {dbTest === 'testing' ? 'Provant...' : 'Executar test'}
+              </button>
+            </div>
+            {dbTest && dbTest !== 'testing' && (
+              <div className={clsx('rounded-lg p-3 text-xs font-mono',
+                dbTest.ok ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+              )}>
+                {dbTest.ok ? '✅ ' : '❌ '}{dbTest.msg}
+              </div>
+            )}
+            <p className="text-xs text-gray-400">
+              Fa un INSERT + SELECT + DELETE de prova per verificar que Supabase accepta escriptures.
+            </p>
+          </div>
+        )}
 
         {/* ── Estat de l'emmagatzematge ──────────────────────────────────── */}
         {!hasDB && (

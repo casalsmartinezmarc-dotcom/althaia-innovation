@@ -43,20 +43,26 @@ export function AppProvider({ children, currentUser, onLogout }) {
           if (pErr) throw pErr
 
           // ── Migració automàtica localStorage → Supabase ───────────────────
-          // Si Supabase és buit però localStorage té dades (transició d'estat)
-          // els migrem una sola vegada i esborrem el localStorage per evitar duplicats.
           let projectsToUse = pData || []
           if (projectsToUse.length === 0) {
             const localProjects = loadLS(STORAGE_KEY, [])
             if (localProjects.length > 0) {
               console.info(`[AppContext] Migrant ${localProjects.length} projectes de localStorage → Supabase`)
-              const inserts = localProjects.map(p => supabase.from('projects').insert(projectToRow(p)))
-              await Promise.allSettled(inserts)
+              const results = await Promise.allSettled(
+                localProjects.map(p => supabase.from('projects').insert(projectToRow(p)))
+              )
+              const failed = results.filter(r => r.status === 'rejected' || r.value?.error)
+              if (failed.length === 0) {
+                // Tots els inserts han anat bé → netejar localStorage
+                localStorage.removeItem(STORAGE_KEY)
+                localStorage.removeItem(TASKS_KEY)
+                localStorage.removeItem(TIMELINE_KEY)
+              } else {
+                // Alguns inserts han fallat → NO esborrem localStorage
+                const err = failed[0]?.value?.error || failed[0]?.reason
+                console.error('[AppContext] Migració parcial, localStorage conservat:', err?.message || err)
+              }
               projectsToUse = localProjects
-              // Esborrem localStorage per evitar re-migracions futures
-              localStorage.removeItem(STORAGE_KEY)
-              localStorage.removeItem(TASKS_KEY)
-              localStorage.removeItem(TIMELINE_KEY)
             }
           }
 
