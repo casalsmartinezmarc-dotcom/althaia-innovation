@@ -13,32 +13,41 @@ const GEMINI_MODEL   = 'gemini-2.0-flash'
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const MAX_TEXT_CHARS  = 40_000   // ~10k tokens — suficient per a qualsevol document
 
-const PROMPT = `Ets un extractor d'informació especialitzat en projectes d'innovació hospitalària.
-Analitza el document de l'Hospital Althaia (Manresa, Catalunya) i extreu els camps indicats.
-Respon ÚNICAMENT amb un objecte JSON vàlid i sense cap text addicional fora del JSON.
+const PROMPT = `Ets un expert en innovació hospitalària i redacció de projectes sanitaris.
+Analitza el document de l'Hospital Althaia (Manresa, Catalunya) i genera una versió estructurada i millorada del contingut per a cada camp del formulari.
 
-CAMPS A EXTREURE (string; "" si no es troba al document):
-- title              : Títol del projecte o necessitat detectada
-- service            : Servei clínic o departament afectat
-- owner_name         : Nom del responsable o referent
-- problem_description: Descripció del problema o necessitat (2-5 frases)
-- beneficiary_profile: Perfil dels beneficiaris (pacients, professionals, etc.)
-- recurrence         : Freqüència i volum del problema
-- existing_alternatives: Solucions actuals i per què no son suficients
-- objectives         : Objectius específics i resultats esperats (llista si cal)
-- hypotheses         : Hipòtesi principal que es vol verificar
-- indicators         : Indicadors de mesura / KPIs principals
-- success_criteria   : Llindars d'èxit i criteris de validació
-- test_protocol      : Protocol de proves o cas pràctic, pas a pas
-- simulation_scenarios: Escenaris de simulació o casos d'ús concrets
-- budget             : Pressupost estimat (text, p.ex. "350.000 €")
-- partners           : Partners, proveïdors o entitats involucrades
-- resources          : Recursos necessaris (equip humà, infraestructura, dades)
-- risks              : Riscos identificats i plans de mitigació
-- timeline           : Calendari o fases d'implementació
+INSTRUCCIONS IMPORTANTS:
+- NO copïis literalment el text del document. Reescriu i sintetitza la informació.
+- Usa un estil professional, clar i orientat a projectes d'innovació sanitària.
+- Organitza la informació de manera lògica i coherent.
+- Si un camp té múltiples elements, usa format de llista amb "• " davant de cada punt.
+- Resumeix si la informació és excessivament llarga (màxim 300 paraules per camp).
+- Escriu sempre en català. Si el document és en castellà o anglès, tradueix.
+- Si no hi ha informació suficient per a un camp, retorna "".
+- Respon ÚNICAMENT amb un objecte JSON vàlid, sense cap text fora del JSON.
+
+CAMPS A GENERAR (string; "" si no hi ha informació):
+- title              : Títol concís i descriptiu del projecte (màxim 10 paraules)
+- service            : Servei clínic o departament afectat (nom oficial del servei)
+- owner_name         : Nom i càrrec del responsable o referent
+- problem_description: Descripció clara del problema o necessitat, explicant el context clínic, l'impacte actual i per què cal una solució (3-5 frases ben construïdes)
+- beneficiary_profile: Perfil detallat dels beneficiaris: qui són, quantes persones, en quins contextos
+- recurrence         : Freqüència, volum i patró del problema (quantes vegades, quants pacients, en quines circumstàncies)
+- existing_alternatives: Quines solucions s'utilitzen ara, per què no son suficients i quin és el gap que queda per cobrir
+- objectives         : Llista d'objectius específics i mesurables del projecte (format • objectiu)
+- hypotheses         : Hipòtesi principal formulada com "Si [acció] → llavors [resultat esperat] → perquè [raonament]"
+- indicators         : Llista d'indicadors concrets que es mesuraran per avaluar el projecte (format • indicador: descripció)
+- success_criteria   : Llista de criteris mínims d'èxit per considerar el projecte viable (format • criteri)
+- test_protocol      : Descripció pas a pas de com es durà a terme el pilot o prova (fases numerades)
+- simulation_scenarios: Casos d'ús concrets que es validaran durant el pilot (format • escenari)
+- budget             : Pressupost estimat desglossat per conceptes si és possible (format • concepte: import)
+- partners           : Llista d'entitats, proveïdors o col·laboradors involucrats i el seu rol (format • entitat: rol)
+- resources          : Recursos necessaris organitzats per categoria: equip humà, infraestructura i dades (format • categoria: detall)
+- risks              : Riscos principals identificats amb el seu impacte i pla de mitigació (format • risc: impacte → mitigació)
+- timeline           : Fases d'implementació amb durada estimada (format • Fase N [durada]: descripció)
 - priority           : Prioritat del projecte — ÚNICAMENT "alta", "mitja" o "baixa"
 - tags               : Paraules clau separades per comes (p.ex. "IA, Living Lab, Cures")
-- kpis               : KPIs finals o indicadors clau de rendiment del projecte
+- kpis               : KPIs finals del projecte amb target quantitatiu si és possible (format • KPI: target)
 
 DOCUMENT:
 `
@@ -77,8 +86,8 @@ export default async function handler(req, res) {
         }],
         generationConfig: {
           responseMimeType: 'application/json',
-          temperature:      0.1,   // baixa creativitat → resultats consistents
-          maxOutputTokens:  2048,
+          temperature:      0.4,
+          maxOutputTokens:  4096,
         },
       }),
     })
