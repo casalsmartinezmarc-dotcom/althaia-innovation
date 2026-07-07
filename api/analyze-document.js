@@ -9,7 +9,7 @@
  * → 500 { error: string }
  */
 
-const GEMINI_MODEL   = 'gemini-2.0-flash'
+const GEMINI_MODEL   = 'gemini-flash-latest'
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const MAX_TEXT_CHARS  = 40_000   // ~10k tokens — suficient per a qualsevol document
 
@@ -77,9 +77,9 @@ export default async function handler(req, res) {
   const truncated = text.slice(0, MAX_TEXT_CHARS)
 
   try {
-    const geminiRes = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+    const geminiRes = await fetch(GEMINI_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: PROMPT + truncated }],
