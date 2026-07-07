@@ -80,35 +80,39 @@ export default async function handler(req, res) {
     generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 4096 },
   })
 
+  const sleep = ms => new Promise(r => setTimeout(r, ms))
+
   let lastError = ''
   for (const model of GEMINI_MODELS) {
-    try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
-      const geminiRes = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-        body,
-      })
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+        const geminiRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+          body,
+        })
 
-      if (!geminiRes.ok) {
-        const errText = await geminiRes.text()
-        lastError = `${model} ${geminiRes.status}: ${errText.slice(0, 200)}`
-        console.warn('[analyze-document] model fallit, provant el següent:', lastError)
-        continue
+        if (!geminiRes.ok) {
+          const errText = await geminiRes.text()
+          lastError = `${model} ${geminiRes.status}: ${errText.slice(0, 200)}`
+          if (geminiRes.status === 503 && attempt === 0) { await sleep(1500); continue }
+          break
+        }
+
+        const data    = await geminiRes.json()
+        const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+        let fields
+        try { fields = JSON.parse(rawJson) } catch {
+          lastError = `JSON invàlid de ${model}`
+          break
+        }
+        return res.status(200).json({ fields })
+
+      } catch (fetchErr) {
+        lastError = fetchErr.message
+        break
       }
-
-      const data    = await geminiRes.json()
-      const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      let fields
-      try { fields = JSON.parse(rawJson) } catch {
-        lastError = `JSON invàlid de ${model}`
-        continue
-      }
-      return res.status(200).json({ fields })
-
-    } catch (fetchErr) {
-      lastError = fetchErr.message
-      continue
     }
   }
 
