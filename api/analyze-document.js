@@ -9,8 +9,7 @@
  * → 500 { error: string }
  */
 
-const GEMINI_MODEL   = 'gemini-flash-latest'
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-flash-latest']
 const MAX_TEXT_CHARS  = 40_000   // ~10k tokens — suficient per a qualsevol document
 
 const PROMPT = `Ets un expert en innovació hospitalària i redacció de projectes sanitaris.
@@ -76,40 +75,44 @@ export default async function handler(req, res) {
   // Truncar per evitar excedir el límit de tokens
   const truncated = text.slice(0, MAX_TEXT_CHARS)
 
-  try {
-    const geminiRes = await fetch(GEMINI_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: PROMPT + truncated }],
-        }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature:      0.4,
-          maxOutputTokens:  4096,
-        },
-      }),
-    })
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: PROMPT + truncated }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 4096 },
+  })
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      console.error('[analyze-document] Gemini error:', errText)
-      return res.status(502).json({ error: `Gemini ${geminiRes.status}: ${errText.slice(0, 300)}` })
-    }
-
-    const data   = await geminiRes.json()
-    const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-
-    let fields
+  let lastError = ''
+  for (const model of GEMINI_MODELS) {
     try {
-      fields = JSON.parse(rawJson)
-    } catch {
-      console.error('[analyze-document] JSON invàlid de Gemini:', rawJson.slice(0, 200))
-      return res.status(502).json({ error: 'Resposta invàlida de Gemini' })
-    }
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+      const geminiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+        body,
+      })
 
-    return res.status(200).json({ fields })
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text()
+        lastError = `${model} ${geminiRes.status}: ${errText.slice(0, 200)}`
+        console.warn('[analyze-document] model fallit, provant el següent:', lastError)
+        continue
+      }
+
+      const data    = await geminiRes.json()
+      const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      let fields
+      try { fields = JSON.parse(rawJson) } catch {
+        lastError = `JSON invàlid de ${model}`
+        continue
+      }
+      return res.status(200).json({ fields })
+
+    } catch (fetchErr) {
+      lastError = fetchErr.message
+      continue
+    }
+  }
+
+  return res.status(502).json({ error: `Tots els models han fallat: ${lastError}` })
 
   } catch (err) {
     console.error('[analyze-document] Error inesperat:', err)
