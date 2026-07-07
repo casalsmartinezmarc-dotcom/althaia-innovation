@@ -95,7 +95,7 @@ export default async function handler(req, res) {
     if (!geminiRes.ok) {
       const errText = await geminiRes.text()
       console.error('[analyze-document] Gemini error:', errText)
-      return res.status(502).json({ error: 'Error de la API de Gemini' })
+      return res.status(502).json({ error: `Gemini ${geminiRes.status}: ${errText.slice(0, 300)}` })
     }
 
     const data   = await geminiRes.json()
