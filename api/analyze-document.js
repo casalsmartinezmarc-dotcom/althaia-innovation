@@ -9,14 +9,13 @@
  * → 500 { error: string }
  */
 
-const GEMINI_MODELS = [
-  'gemini-2.5-flash-lite-preview-06-17',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-flash-latest',
-]
-const MAX_TEXT_CHARS  = 40_000   // ~10k tokens — suficient per a qualsevol document
+// Vercel Hobby: extends default 10s limit up to 60s
+export const config = { maxDuration: 60 }
+
+const GEMINI_MODEL   = 'gemini-2.5-flash'
+const MAX_RETRIES    = 4                  // 4 attempts total for 503 overload
+const BACKOFF_MS     = [0, 3000, 6000, 10000]
+const MAX_TEXT_CHARS = 12_000             // ~3k tokens
 
 const PROMPT = `Ets un expert en innovació hospitalària i redacció de projectes sanitaris.
 Analitza el document de l'Hospital Althaia (Manresa, Catalunya) i genera una versió estructurada i millorada del contingut per a cada camp del formulari.
@@ -83,44 +82,45 @@ export default async function handler(req, res) {
 
   const body = JSON.stringify({
     contents: [{ parts: [{ text: PROMPT + truncated }] }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 4096 },
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 16384 },
   })
 
   const sleep = ms => new Promise(r => setTimeout(r, ms))
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
   let lastError = ''
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
-        const geminiRes = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-          body,
-        })
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (BACKOFF_MS[attempt] > 0) await sleep(BACKOFF_MS[attempt])
+    try {
+      const geminiRes = await fetch(endpoint, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+        body,
+      })
 
-        if (!geminiRes.ok) {
-          const errText = await geminiRes.text()
-          lastError = `${model} ${geminiRes.status}: ${errText.slice(0, 200)}`
-          if (geminiRes.status === 503 && attempt === 0) { await sleep(1500); continue }
-          break
-        }
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text()
+        lastError = `attempt${attempt + 1} HTTP${geminiRes.status}: ${errText.slice(0, 200)}`
+        if (geminiRes.status === 503) continue  // transient overload → retry
+        break                                    // 429, 400, 401, etc. → no retry
+      }
 
-        const data    = await geminiRes.json()
-        const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-        let fields
-        try { fields = JSON.parse(rawJson) } catch {
-          lastError = `JSON invàlid de ${model}`
-          break
-        }
-        return res.status(200).json({ fields })
-
-      } catch (fetchErr) {
-        lastError = fetchErr.message
+      const data       = await geminiRes.json()
+      const candidate  = data?.candidates?.[0]
+      const rawJson    = candidate?.content?.parts?.[0]?.text ?? ''
+      const finishReason = candidate?.finishReason ?? 'none'
+      let fields
+      try { fields = JSON.parse(rawJson) } catch {
+        lastError = `JSON invàlid (finishReason=${finishReason}, chars=${rawJson.length})`
         break
       }
+      return res.status(200).json({ fields })
+
+    } catch (fetchErr) {
+      lastError = fetchErr.message
+      break
     }
   }
 
-  return res.status(502).json({ error: `Tots els models han fallat: ${lastError}` })
+  return res.status(502).json({ error: `Gemini no disponible: ${lastError}` })
 }

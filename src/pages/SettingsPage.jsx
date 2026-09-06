@@ -1,7 +1,11 @@
 import { useState, useRef } from 'react'
 import Layout from '../components/Layout/Layout'
 import { useApp } from '../context/AppContext'
-import { supabase, hasDB, projectToRow } from '../lib/supabase'
+import {
+  supabase, hasDB, projectToRow, decryptProject, decryptTask, decryptEvent,
+  encryptTaskFields, encryptEventFields,
+} from '../lib/supabase'
+import { dbWrite } from '../lib/dbWrite'
 import {
   Download, Upload, Trash2, Check, AlertTriangle,
   Database, Info, RefreshCw, HardDrive, Wifi, WifiOff,
@@ -42,26 +46,26 @@ export default function SettingsPage() {
     setDbTest('testing')
     const testId = Date.now()
     try {
-      // 1. Test INSERT
-      const { error: insErr } = await supabase.from('projects').insert({
-        id:            testId,
-        title:         '__test_connexió__',
-        current_phase: 1,
-        status:        'active',
-        priority:      'mitja',
+      // 1. Test d'escriptura — passa per /api/db (service role key, sense fallback:
+      //    si encara no està configurada, volem saber-ho, no que es dissimuli)
+      await dbWrite('projects', 'insert', {
+        noFallback: true,
+        data: { id: testId, title: '__test_connexió__', current_phase: 1, status: 'active', priority: 'mitja' },
       })
-      if (insErr) { setDbTest({ ok: false, msg: `INSERT fallat: ${insErr.message} (codi: ${insErr.code})` }); return }
 
-      // 2. Test SELECT (llegim el que acabem d'inserir)
+      // 2. Test de lectura — amb la clau anon (l'única que veu el navegador)
       const { data, error: selErr } = await supabase.from('projects').select('id').eq('id', testId).single()
-      if (selErr || !data) { setDbTest({ ok: false, msg: `INSERT ok però SELECT fallat: ${selErr?.message}` }); return }
+      if (selErr || !data) { setDbTest({ ok: false, msg: `Escriptura ok però lectura fallada: ${selErr?.message}` }); return }
 
-      // 3. Test DELETE (netejar)
-      await supabase.from('projects').delete().eq('id', testId)
+      // 3. Neteja
+      await dbWrite('projects', 'delete', { id: testId, noFallback: true })
 
-      setDbTest({ ok: true, msg: 'INSERT + SELECT + DELETE funcionen correctament.' })
+      setDbTest({ ok: true, msg: 'Lectura (clau anon) i escriptura (service role via /api/db) funcionen correctament.' })
     } catch (err) {
-      setDbTest({ ok: false, msg: `Error inesperat: ${err.message}` })
+      const hint = err.message === 'SERVICE_KEY_MISSING'
+        ? 'La clau SUPABASE_SERVICE_ROLE_KEY encara no està configurada a Vercel. Mentrestant l\'app segueix funcionant amb la clau anon (menys segur).'
+        : err.message
+      setDbTest({ ok: false, msg: hint })
     }
   }
 
@@ -85,16 +89,18 @@ export default function SettingsPage() {
         supabase.from('project_tasks').select('*'),
         supabase.from('timeline_events').select('*'),
       ])
-      projectsData = p || []
+      projectsData = (p || []).map(decryptProject)
       for (const row of (t || [])) {
-        const pid = row.project_id
+        const task = decryptTask(row)
+        const pid  = task.project_id
         if (!tasksData[pid]) tasksData[pid] = []
-        tasksData[pid].push(row)
+        tasksData[pid].push(task)
       }
       for (const row of (e || [])) {
-        const pid = row.project_id
+        const event = decryptEvent(row)
+        const pid   = event.project_id
         if (!eventsData[pid]) eventsData[pid] = []
-        eventsData[pid].push(row)
+        eventsData[pid].push(event)
       }
     } else {
       projectsData = JSON.parse(localStorage.getItem(STORAGE_KEY)  || '[]')
@@ -141,17 +147,16 @@ export default function SettingsPage() {
           setImportMsg({ type: 'info', text: 'Important dades a Supabase...' })
 
           // 1. Esborra tot (cascade elimina tasks i events)
-          await supabase.from('projects').delete().gt('id', 0)
+          await dbWrite('projects', 'deleteAll')
 
-          // 2. Insereix projectes
+          // 2. Insereix projectes (torna a encriptar els camps sensibles)
           if (data.projects.length > 0) {
-            const { error } = await supabase.from('projects').insert(data.projects.map(projectToRow))
-            if (error) throw error
+            await dbWrite('projects', 'insert', { data: data.projects.map(projectToRow) })
           }
 
           // 3. Insereix tasques
           const taskRows = Object.entries(data.project_tasks || {}).flatMap(([pid, tasks]) =>
-            (tasks || []).map(t => ({
+            (tasks || []).map(t => encryptTaskFields({
               id:          t.id,
               project_id:  Number(pid),
               title:       t.title,
@@ -162,11 +167,11 @@ export default function SettingsPage() {
               assigned_to: t.assigned_to || null,
             }))
           )
-          if (taskRows.length > 0) await supabase.from('project_tasks').insert(taskRows)
+          if (taskRows.length > 0) await dbWrite('project_tasks', 'insert', { data: taskRows })
 
           // 4. Insereix timeline events
           const eventRows = Object.entries(data.timeline_events || {}).flatMap(([pid, events]) =>
-            (events || []).map(ev => ({
+            (events || []).map(ev => encryptEventFields({
               id:         ev.id,
               project_id: Number(pid),
               title:      ev.title,
@@ -175,7 +180,7 @@ export default function SettingsPage() {
               notes:      ev.notes || null,
             }))
           )
-          if (eventRows.length > 0) await supabase.from('timeline_events').insert(eventRows)
+          if (eventRows.length > 0) await dbWrite('timeline_events', 'insert', { data: eventRows })
 
           setImportMsg({
             type: 'ok',

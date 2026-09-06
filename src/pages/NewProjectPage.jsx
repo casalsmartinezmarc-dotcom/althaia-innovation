@@ -9,23 +9,30 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 
-// ─── 6 steps mirrors the wizard ──────────────────────────────────────────────
 const STEPS = [
-  { id: 1, icon: Search,     label: 'Activació',    desc: 'Detecció de necessitat'      },
-  { id: 2, icon: Lightbulb,  label: 'Objectius',    desc: 'Hipòtesis i indicadors'      },
-  { id: 3, icon: FlaskConical,label:'Protocol',     desc: 'Proves i simulació'          },
-  { id: 4, icon: Wrench,     label: 'Recursos',     desc: 'Pressupost, riscos, partners' },
-  { id: 5, icon: BarChart2,  label: 'Impacte',      desc: 'Matriu d\'impacte'           },
-  { id: 6, icon: Flag,       label: 'Confirmar',    desc: 'Resum i crear'               },
+  { id: 1, icon: Search,      label: 'Activació',    desc: 'Detecció de necessitat'      },
+  { id: 2, icon: Lightbulb,   label: 'Objectius',    desc: 'Hipòtesis, indicadors i KPIs' },
+  { id: 3, icon: FlaskConical, label: 'Protocol',    desc: 'Proves, simulació, pilot'     },
+  { id: 4, icon: Wrench,      label: 'Recursos',     desc: 'Pressupost, riscos, partners' },
+  { id: 5, icon: BarChart2,   label: 'Impacte',      desc: 'Matriu d\'impacte'            },
+  { id: 6, icon: Flag,        label: 'Confirmar',    desc: 'Resum i crear'                },
 ]
 
 const LIMITS = {
   title: 120, owner_name: 80, problem_description: 1000,
   beneficiary_profile: 500, recurrence: 300, existing_alternatives: 400, tags: 150,
   objectives: 1000, hypotheses: 500, indicators: 500, success_criteria: 400,
+  kpis_finals: 500,
   test_protocol: 800, simulation_scenarios: 500,
+  interoperability: 400, usability_plan: 400, digital_twin_desc: 300,
   budget: 20, partners: 300, resources: 500, risks: 500, timeline: 300,
+  scalability_plan: 500,
 }
+
+const HELIX_ACTORS = ['Ciutadania/Pacients', 'Administracions', 'Universitats/Recerca', 'Empreses/Startups']
+const BENEFICIARY_PROFILES = ['Autònom', 'Fràgil', 'Dependència moderada', 'Dependència severa', 'Discapacitat', 'Malaltia crònica', 'Cuidador/a', 'Professional sanitari']
+const PILOT_ENVS = ['Domicili', 'Residència', 'Centre de dia', 'Comunitat', 'Hospital', 'Ambulatori']
+const IDEA_ORIGINS = ['Professional sanitari', 'Ciutadà/Pacient', 'Empresa/Startup', 'Universitat/Recerca']
 
 function CharCount({ value, max }) {
   const len = (value || '').length
@@ -43,6 +50,30 @@ function LabelRow({ label, htmlFor, max, value }) {
     <div className="flex items-center justify-between mb-1">
       <label className="label mb-0" htmlFor={htmlFor}>{label}</label>
       {max && <CharCount value={value} max={max} />}
+    </div>
+  )
+}
+
+function CheckGroup({ label, options, values, onChange }) {
+  const toggle = (opt) => {
+    const next = values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]
+    onChange(next)
+  }
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <div className="flex flex-wrap gap-2 mt-1.5">
+        {options.map(opt => (
+          <button key={opt} type="button" onClick={() => toggle(opt)}
+            className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
+              values.includes(opt)
+                ? 'bg-althaia-600 text-white border-althaia-600'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
+            )}>
+            {opt}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -72,18 +103,27 @@ const initialForm = {
   problem_description: '', beneficiary_profile: '',
   recurrence: '', existing_alternatives: '', tags: '',
   priority: 'mitja', current_phase: 1,
+  idea_origin: '',
+  helix_actors: [],
+  beneficiary_social_profile: [],
   // Step 2 – Objectius
   objectives: '', hypotheses: '', indicators: '', success_criteria: '',
+  kpis_finals: '',
   // Step 3 – Protocol
   test_protocol: '', simulation_scenarios: '',
+  pilot_environments: [],
+  interoperability: '',
+  usability_plan: '',
+  digital_twin: false,
+  digital_twin_desc: '',
   // Step 4 – Recursos
   budget: '', partners: '', resources: '', risks: '', timeline: '',
+  scalability_plan: '',
   // Step 5 – Impacte
   impact: { clinical: 5, economic: 5, organizational: 5, patient_exp: 5 },
   ai_related: false,
 }
 
-// Validates required fields per step
 function stepErrors(form, step) {
   const e = []
   if (step === 1) {
@@ -105,10 +145,10 @@ export default function NewProjectPage() {
   })
   const [saved, setSaved] = useState(false)
 
-  const set  = (key, val) => setForm(f => ({ ...f, [key]: val }))
+  const set       = (key, val) => setForm(f => ({ ...f, [key]: val }))
   const setImpact = (key, val) => setForm(f => ({ ...f, impact: { ...f.impact, [key]: val } }))
 
-  const errors = stepErrors(form, step)
+  const errors  = stepErrors(form, step)
   const canNext = errors.length === 0
 
   const handleSubmit = () => {
@@ -131,32 +171,41 @@ export default function NewProjectPage() {
         organizational: form.impact.organizational,
         patient_exp:    form.impact.patient_exp,
       },
-      // All manual fields stored as extended data
       wizard_activacio: {
-        title:                 form.title,
-        service:               form.service,
-        owner_name:            form.owner_name,
-        problem_description:   form.problem_description,
-        beneficiary_profile:   form.beneficiary_profile,
-        recurrence:            form.recurrence,
-        existing_alternatives: form.existing_alternatives,
-        priority:              form.priority,
-        tags:                  form.tags,
+        title:                    form.title,
+        service:                  form.service,
+        owner_name:               form.owner_name,
+        problem_description:      form.problem_description,
+        beneficiary_profile:      form.beneficiary_profile,
+        recurrence:               form.recurrence,
+        existing_alternatives:    form.existing_alternatives,
+        priority:                 form.priority,
+        tags:                     form.tags,
+        idea_origin:              form.idea_origin,
+        helix_actors:             form.helix_actors,
+        beneficiary_social_profile: form.beneficiary_social_profile,
       },
       wizard_experimental: {
-        objectives:          form.objectives,
-        hypotheses:          form.hypotheses,
-        indicators:          form.indicators,
-        success_criteria:    form.success_criteria,
-        test_protocol:       form.test_protocol,
-        simulation_scenarios:form.simulation_scenarios,
+        objectives:           form.objectives,
+        hypotheses:           form.hypotheses,
+        indicators:           form.indicators,
+        success_criteria:     form.success_criteria,
+        kpis_finals:          form.kpis_finals,
+        test_protocol:        form.test_protocol,
+        simulation_scenarios: form.simulation_scenarios,
+        pilot_environments:   form.pilot_environments,
+        interoperability:     form.interoperability,
+        usability_plan:       form.usability_plan,
+        digital_twin:         form.digital_twin,
+        digital_twin_desc:    form.digital_twin_desc,
       },
       wizard_dissenyFinal: {
-        budget:   form.budget,
-        partners: form.partners,
-        resources:form.resources,
-        risks:    form.risks,
-        timeline: form.timeline,
+        budget:          form.budget,
+        partners:        form.partners,
+        resources:       form.resources,
+        risks:           form.risks,
+        timeline:        form.timeline,
+        scalability_plan: form.scalability_plan,
       },
     })
     setSaved(true)
@@ -166,7 +215,7 @@ export default function NewProjectPage() {
   const total = STEPS.length
 
   return (
-    <Layout title="Afegir Projecte" subtitle="Formulari complet — Tots els requisits del Social Living Lab">
+    <Layout title="Afegir Projecte" subtitle="Formulari complet — Tots els requisits del Social Living Lab (SISCU)">
       <div className="max-w-2xl mx-auto">
 
         {/* Step pills */}
@@ -234,13 +283,46 @@ export default function NewProjectPage() {
                   value={form.problem_description} onChange={e => set('problem_description', e.target.value)} />
               </div>
 
+              {/* SISCU: Origen de la idea */}
               <div>
-                <LabelRow label="Perfil de beneficiaris" max={LIMITS.beneficiary_profile} value={form.beneficiary_profile} />
-                <textarea className="input h-20 resize-none"
-                  placeholder="Qui es beneficia? Pacients crònics, professionals d'infermeria, personal de triatge...  Quants aproximadament?"
+                <label className="label">Origen de la idea <span className="text-xs font-normal text-gray-400">(Quàdruple Hèlix)</span></label>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {IDEA_ORIGINS.map(origin => (
+                    <button key={origin} type="button" onClick={() => set('idea_origin', form.idea_origin === origin ? '' : origin)}
+                      className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
+                        form.idea_origin === origin
+                          ? 'bg-althaia-600 text-white border-althaia-600'
+                          : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
+                      )}>
+                      {origin}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SISCU: Actors Quàdruple Hèlix participants */}
+              <CheckGroup
+                label="Actors de la Quàdruple Hèlix participants"
+                options={HELIX_ACTORS}
+                values={form.helix_actors}
+                onChange={v => set('helix_actors', v)}
+              />
+
+              <div>
+                <LabelRow label="Perfil de beneficiaris (descripció lliure)" max={LIMITS.beneficiary_profile} value={form.beneficiary_profile} />
+                <textarea className="input h-16 resize-none"
+                  placeholder="Qui es beneficia? Pacients crònics, professionals d'infermeria...  Quants aproximadament?"
                   maxLength={LIMITS.beneficiary_profile}
                   value={form.beneficiary_profile} onChange={e => set('beneficiary_profile', e.target.value)} />
               </div>
+
+              {/* SISCU: Perfil social dels beneficiaris */}
+              <CheckGroup
+                label="Perfil social dels beneficiaris"
+                options={BENEFICIARY_PROFILES}
+                values={form.beneficiary_social_profile}
+                onChange={v => set('beneficiary_social_profile', v)}
+              />
 
               <div>
                 <LabelRow label="Intensitat i recurrència de la necessitat" max={LIMITS.recurrence} value={form.recurrence} />
@@ -292,17 +374,27 @@ export default function NewProjectPage() {
               <div>
                 <LabelRow label="Hipòtesi de partida" max={LIMITS.hypotheses} value={form.hypotheses} />
                 <textarea className="input h-20 resize-none"
-                  placeholder="Si [acció] aleshores [resultat esperat] perquè [raonament]. Ex: Si implementem l'IA predictiva, la mortalitat es reduirà un 15%..."
+                  placeholder="Si [acció] aleshores [resultat esperat] perquè [raonament]..."
                   maxLength={LIMITS.hypotheses}
                   value={form.hypotheses} onChange={e => set('hypotheses', e.target.value)} />
               </div>
               <div>
-                <LabelRow label="Indicadors de mesura (KPIs)" max={LIMITS.indicators} value={form.indicators} />
+                <LabelRow label="Indicadors de mesura (KPIs de seguiment)" max={LIMITS.indicators} value={form.indicators} />
                 <textarea className="input h-20 resize-none"
-                  placeholder="Ex: Temps detecció sèpsia (minuts), Mortalitat UCI (%),  Satisfacció professional (1-10)..."
+                  placeholder="Ex: Temps detecció sèpsia (min), Mortalitat UCI (%), Satisfacció professional (1-10)..."
                   maxLength={LIMITS.indicators}
                   value={form.indicators} onChange={e => set('indicators', e.target.value)} />
               </div>
+
+              {/* SISCU: KPIs finals amb target quantitatiu */}
+              <div>
+                <LabelRow label="KPIs finals amb target quantitatiu" max={LIMITS.kpis_finals} value={form.kpis_finals} />
+                <textarea className="input h-20 resize-none"
+                  placeholder="Ex: Temps de detecció: de 45 min → 20 min (-55%). Taxa d'èxit del pilot: ≥80%. Satisfacció SUS: ≥70 punts."
+                  maxLength={LIMITS.kpis_finals}
+                  value={form.kpis_finals} onChange={e => set('kpis_finals', e.target.value)} />
+              </div>
+
               <div>
                 <LabelRow label="Llindar d'èxit" max={LIMITS.success_criteria} value={form.success_criteria} />
                 <textarea className="input h-16 resize-none"
@@ -318,17 +410,65 @@ export default function NewProjectPage() {
             <>
               <div>
                 <LabelRow label="Protocol de proves" max={LIMITS.test_protocol} value={form.test_protocol} />
-                <textarea className="input h-28 resize-none"
+                <textarea className="input h-24 resize-none"
                   placeholder="Descriu els passos per dur a terme la prova pilot. Qui participa? Quin procés se segueix? Com es recullen les dades?"
                   maxLength={LIMITS.test_protocol}
                   value={form.test_protocol} onChange={e => set('test_protocol', e.target.value)} />
               </div>
               <div>
                 <LabelRow label="Escenaris de simulació" max={LIMITS.simulation_scenarios} value={form.simulation_scenarios} />
-                <textarea className="input h-24 resize-none"
-                  placeholder="Quins casos d'ús o situacions concretes s'han de provar? Ex: pacient d'urgències amb febre alta i leucocitosi..."
+                <textarea className="input h-20 resize-none"
+                  placeholder="Quins casos d'ús o situacions concretes s'han de provar?"
                   maxLength={LIMITS.simulation_scenarios}
                   value={form.simulation_scenarios} onChange={e => set('simulation_scenarios', e.target.value)} />
+              </div>
+
+              {/* SISCU: Entorn de pilotatge */}
+              <CheckGroup
+                label="Entorn de pilotatge"
+                options={PILOT_ENVS}
+                values={form.pilot_environments}
+                onChange={v => set('pilot_environments', v)}
+              />
+
+              {/* SISCU: Bessó Digital */}
+              <div>
+                <label className="label">Bessó Digital (Digital Twin)</label>
+                <div className="flex gap-3 mb-2">
+                  {[true, false].map(v => (
+                    <button key={String(v)} type="button" onClick={() => set('digital_twin', v)}
+                      className={clsx('px-5 py-2 rounded-lg text-sm font-medium border transition-all',
+                        form.digital_twin === v ? 'bg-althaia-600 text-white border-althaia-600' : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
+                      )}>{v ? '✅ Sí' : '❌ No'}</button>
+                  ))}
+                </div>
+                {form.digital_twin && (
+                  <div>
+                    <LabelRow label="Descripció del Bessó Digital" max={LIMITS.digital_twin_desc} value={form.digital_twin_desc} />
+                    <textarea className="input h-16 resize-none"
+                      placeholder="Com s'usarà el bessó digital? Quin entorn o plataforma?"
+                      maxLength={LIMITS.digital_twin_desc}
+                      value={form.digital_twin_desc} onChange={e => set('digital_twin_desc', e.target.value)} />
+                  </div>
+                )}
+              </div>
+
+              {/* SISCU: Interoperabilitat */}
+              <div>
+                <LabelRow label="Interoperabilitat (requisits tècnics)" max={LIMITS.interoperability} value={form.interoperability} />
+                <textarea className="input h-20 resize-none"
+                  placeholder="Quins sistemes cal integrar? (HIS, SAP, HL7, FHIR...) Quins estàndards es requereixen?"
+                  maxLength={LIMITS.interoperability}
+                  value={form.interoperability} onChange={e => set('interoperability', e.target.value)} />
+              </div>
+
+              {/* SISCU: Usabilitat */}
+              <div>
+                <LabelRow label="Pla d'avaluació d'usabilitat (SUS)" max={LIMITS.usability_plan} value={form.usability_plan} />
+                <textarea className="input h-20 resize-none"
+                  placeholder="Com s'avaluarà la usabilitat? Qüestionari SUS? Quin perfil d'usuaris? Quant és el target SUS (p.ex. ≥70)?"
+                  maxLength={LIMITS.usability_plan}
+                  value={form.usability_plan} onChange={e => set('usability_plan', e.target.value)} />
               </div>
 
               <div>
@@ -361,7 +501,7 @@ export default function NewProjectPage() {
               <div>
                 <LabelRow label="Partners i proveïdors" max={LIMITS.partners} value={form.partners} />
                 <textarea className="input h-20 resize-none"
-                  placeholder="Empreses tecnològiques, universitats, altres hospitals, fundacions... que col·laboren o subministren."
+                  placeholder="Empreses tecnològiques, universitats, altres hospitals, fundacions..."
                   maxLength={LIMITS.partners}
                   value={form.partners} onChange={e => set('partners', e.target.value)} />
               </div>
@@ -373,7 +513,7 @@ export default function NewProjectPage() {
                   value={form.resources} onChange={e => set('resources', e.target.value)} />
               </div>
               <div>
-                <LabelRow label="Riscos identificats" max={LIMITS.risks} value={form.risks} />
+                <LabelRow label="Riscos identificats i pla de mitigació" max={LIMITS.risks} value={form.risks} />
                 <textarea className="input h-20 resize-none"
                   placeholder="Riscos tècnics, clínics, legals, de privacitat, d'adopció... Com es mitiguen?"
                   maxLength={LIMITS.risks}
@@ -386,6 +526,15 @@ export default function NewProjectPage() {
                   maxLength={LIMITS.timeline}
                   value={form.timeline} onChange={e => set('timeline', e.target.value)} />
               </div>
+
+              {/* SISCU: Escalabilitat */}
+              <div>
+                <LabelRow label="Escalabilitat i transferència al SISCU" max={LIMITS.scalability_plan} value={form.scalability_plan} />
+                <textarea className="input h-20 resize-none"
+                  placeholder="Com es replicarà la solució a altres centres o territoris? Quins requisits de transferència al sistema públic (SISCU)?"
+                  maxLength={LIMITS.scalability_plan}
+                  value={form.scalability_plan} onChange={e => set('scalability_plan', e.target.value)} />
+              </div>
             </>
           )}
 
@@ -394,10 +543,10 @@ export default function NewProjectPage() {
             <>
               <p className="text-sm text-gray-500">Valora l'impacte esperat de 1 (mínim) a 10 (màxim).</p>
               <div className="space-y-4">
-                <ScoreSlider label="🏥 Impacte Clínic"       value={form.impact.clinical}      onChange={v => setImpact('clinical', v)} />
-                <ScoreSlider label="💶 Impacte Econòmic"      value={form.impact.economic}      onChange={v => setImpact('economic', v)} />
-                <ScoreSlider label="🏢 Impacte Organitzatiu"  value={form.impact.organizational} onChange={v => setImpact('organizational', v)} />
-                <ScoreSlider label="😊 Experiència Pacient"   value={form.impact.patient_exp}   onChange={v => setImpact('patient_exp', v)} />
+                <ScoreSlider label="🏥 Impacte Clínic"        value={form.impact.clinical}       onChange={v => setImpact('clinical', v)} />
+                <ScoreSlider label="💶 Impacte Econòmic"       value={form.impact.economic}       onChange={v => setImpact('economic', v)} />
+                <ScoreSlider label="🏢 Impacte Organitzatiu"   value={form.impact.organizational}  onChange={v => setImpact('organizational', v)} />
+                <ScoreSlider label="😊 Experiència Pacient"    value={form.impact.patient_exp}    onChange={v => setImpact('patient_exp', v)} />
               </div>
               <div>
                 <label className="label">Projecte relacionat amb IA</label>
@@ -428,6 +577,18 @@ export default function NewProjectPage() {
                   <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Pressupost</span><span className="text-gray-700">{form.budget ? `€${Number(form.budget).toLocaleString()}` : '—'}</span></div>
                 </div>
 
+                {form.idea_origin && (
+                  <div><span className="text-gray-400 text-xs uppercase tracking-wide block mb-0.5">Origen</span>
+                    <p className="text-xs text-gray-700">{form.idea_origin}</p>
+                  </div>
+                )}
+
+                {form.helix_actors.length > 0 && (
+                  <div><span className="text-gray-400 text-xs uppercase tracking-wide block mb-0.5">Actors Hèlix</span>
+                    <p className="text-xs text-gray-700">{form.helix_actors.join(', ')}</p>
+                  </div>
+                )}
+
                 {form.problem_description && (
                   <div><span className="text-gray-400 text-xs uppercase tracking-wide block mb-0.5">Problema</span>
                     <p className="text-xs text-gray-700 line-clamp-3">{form.problem_description}</p>
@@ -436,27 +597,35 @@ export default function NewProjectPage() {
 
                 {/* Completitud */}
                 <div className="mt-2 border-t border-althaia-100 pt-3">
-                  <p className="text-xs font-semibold text-althaia-700 mb-1.5">Camps del Manual Operatiu completats:</p>
+                  <p className="text-xs font-semibold text-althaia-700 mb-1.5">Requisits SISCU completats:</p>
                   <div className="grid grid-cols-2 gap-1 text-xs">
                     {[
-                      ['Títol',           form.title],
-                      ['Servei',          form.service],
-                      ['Responsable',     form.owner_name],
-                      ['Descripció',      form.problem_description],
-                      ['Beneficiaris',    form.beneficiary_profile],
-                      ['Recurrència',     form.recurrence],
-                      ['Alternatives',    form.existing_alternatives],
-                      ['Objectius',       form.objectives],
-                      ['Hipòtesi',        form.hypotheses],
-                      ['Indicadors',      form.indicators],
-                      ['Llindar d\'èxit', form.success_criteria],
-                      ['Protocol',        form.test_protocol],
-                      ['Escenaris',       form.simulation_scenarios],
-                      ['Pressupost',      form.budget],
-                      ['Partners',        form.partners],
-                      ['Recursos',        form.resources],
-                      ['Riscos',          form.risks],
-                      ['Cronograma',      form.timeline],
+                      ['Títol',                   form.title],
+                      ['Servei',                  form.service],
+                      ['Responsable',             form.owner_name],
+                      ['Descripció problema',     form.problem_description],
+                      ['Origen idea (Hèlix)',     form.idea_origin],
+                      ['Actors Quàdruple Hèlix',  form.helix_actors.length > 0],
+                      ['Perfil social beneficiaris', form.beneficiary_social_profile.length > 0],
+                      ['Beneficiaris (desc.)',    form.beneficiary_profile],
+                      ['Recurrència',             form.recurrence],
+                      ['Alternatives',            form.existing_alternatives],
+                      ['Objectius',               form.objectives],
+                      ['Hipòtesi',                form.hypotheses],
+                      ['KPIs seguiment',          form.indicators],
+                      ['KPIs finals amb target',  form.kpis_finals],
+                      ['Llindar d\'èxit',         form.success_criteria],
+                      ['Protocol de proves',      form.test_protocol],
+                      ['Escenaris simulació',     form.simulation_scenarios],
+                      ['Entorn pilotatge',        form.pilot_environments.length > 0],
+                      ['Interoperabilitat',       form.interoperability],
+                      ['Pla usabilitat (SUS)',    form.usability_plan],
+                      ['Pressupost',              form.budget],
+                      ['Partners',                form.partners],
+                      ['Recursos',                form.resources],
+                      ['Riscos',                  form.risks],
+                      ['Cronograma',              form.timeline],
+                      ['Escalabilitat SISCU',     form.scalability_plan],
                     ].map(([label, val]) => (
                       <div key={label} className={clsx('flex items-center gap-1.5', val ? 'text-green-600' : 'text-gray-300')}>
                         <span>{val ? '✓' : '○'}</span><span>{label}</span>

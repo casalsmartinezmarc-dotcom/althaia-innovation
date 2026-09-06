@@ -626,6 +626,278 @@ function TimelineTab({ project, history, onAddEvent, onDeleteEvent }) {
   )
 }
 
+// ─── Pilot Tab ────────────────────────────────────────────────────────────────
+const initPilot = {
+  location: '', professionals_involved: '', patients_involved: '',
+  adoption_rate: '', satisfaction_score: '', incidents: '',
+  preliminary_results: '', start_date: '', end_date: '', progress: '',
+}
+
+function PilotForm({ initial, onSave, onCancel }) {
+  const [data, setData] = useState({ ...initPilot, ...initial })
+  const set = (k, v) => setData(d => ({ ...d, [k]: v }))
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="label">Ubicació</label>
+          <input className="input" value={data.location} onChange={e => set('location', e.target.value)} /></div>
+        <div><label className="label">Progrés (%)</label>
+          <input type="number" min={0} max={100} className="input" value={data.progress} onChange={e => set('progress', Number(e.target.value))} /></div>
+        <div><label className="label">Professionals implicats</label>
+          <input type="number" className="input" value={data.professionals_involved} onChange={e => set('professionals_involved', Number(e.target.value))} /></div>
+        <div><label className="label">Pacients implicats</label>
+          <input type="number" className="input" value={data.patients_involved} onChange={e => set('patients_involved', Number(e.target.value))} /></div>
+        <div><label className="label">Taxa d'adopció (%)</label>
+          <input type="number" min={0} max={100} className="input" value={data.adoption_rate} onChange={e => set('adoption_rate', Number(e.target.value))} /></div>
+        <div><label className="label">Satisfacció (0-10)</label>
+          <input type="number" min={0} max={10} className="input" value={data.satisfaction_score} onChange={e => set('satisfaction_score', Number(e.target.value))} /></div>
+        <div><label className="label">Data inici</label>
+          <input type="date" className="input" value={data.start_date} onChange={e => set('start_date', e.target.value)} /></div>
+        <div><label className="label">Data fi (si escau)</label>
+          <input type="date" className="input" value={data.end_date} onChange={e => set('end_date', e.target.value)} /></div>
+        <div><label className="label">Incidències</label>
+          <input type="number" className="input" value={data.incidents} onChange={e => set('incidents', Number(e.target.value))} /></div>
+      </div>
+      <div>
+        <label className="label">Resultats preliminars</label>
+        <textarea className="input h-24 resize-none" value={data.preliminary_results} onChange={e => set('preliminary_results', e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onSave(data)} className="btn-primary flex-1 justify-center">
+          <Check size={14} /> Guardar dades de pilot
+        </button>
+        {onCancel && <button type="button" onClick={onCancel} className="btn-secondary">Cancel·lar</button>}
+      </div>
+    </div>
+  )
+}
+
+function PilotTab({ project, pilot, onSave }) {
+  const [editing, setEditing] = useState(false)
+
+  if (!pilot || editing) {
+    return (
+      <div className="space-y-4">
+        {project.current_phase < 5 && !pilot && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+            El projecte encara no ha arribat a la fase 5 (Pilot), però pots registrar dades igualment.
+          </div>
+        )}
+        <PilotForm initial={pilot || {}} onSave={d => { onSave(d); setEditing(false) }} onCancel={pilot ? () => setEditing(false) : null} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex justify-end">
+        <button type="button" onClick={() => setEditing(true)} className="btn-secondary text-xs py-1.5 px-3">Editar dades</button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Professionals', value: pilot.professionals_involved, color: 'text-althaia-600' },
+          { label: 'Pacients',      value: pilot.patients_involved,      color: 'text-teal-600'    },
+          { label: 'Adopció',       value: `${pilot.adoption_rate}%`,    color: pilot.adoption_rate >= 70 ? 'text-green-600' : 'text-orange-600' },
+          { label: 'Satisfacció',   value: `${pilot.satisfaction_score}/10`, color: 'text-purple-600' },
+        ].map(kpi => (
+          <div key={kpi.label} className="bg-gray-50 rounded-xl p-4 text-center">
+            <p className={clsx('text-2xl font-bold', kpi.color)}>{kpi.value}</p>
+            <p className="text-xs text-gray-500 mt-1">{kpi.label}</p>
+          </div>
+        ))}
+      </div>
+      <div>
+        <p className="label">Progrés del pilot</p>
+        <div className="score-bar mt-2">
+          <div className="score-bar-fill bg-althaia-500" style={{ width: `${pilot.progress}%` }} />
+        </div>
+        <p className="text-xs text-gray-400 mt-1">{pilot.progress}% completat · {pilot.start_date} → {pilot.end_date || 'en curs'}</p>
+      </div>
+      {pilot.preliminary_results && (
+        <div>
+          <p className="label">Resultats preliminars</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{pilot.preliminary_results}</p>
+        </div>
+      )}
+      {pilot.incidents > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">{pilot.incidents} incidències registrades</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Evaluation Tab ───────────────────────────────────────────────────────────
+const initEval = {
+  clinical_outcome: '', economic_outcome: '', patient_experience: '',
+  professional_satisfaction: '', sustainability_score: '', social_return: '',
+}
+
+function EvaluationForm({ initial, onSave, onCancel }) {
+  const [data, setData] = useState({ ...initEval, ...initial })
+  const set = (k, v) => setData(d => ({ ...d, [k]: v }))
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="label">Resultats clínics</label>
+        <textarea className="input h-20 resize-none" value={data.clinical_outcome} onChange={e => set('clinical_outcome', e.target.value)} />
+      </div>
+      <div>
+        <label className="label">Resultats econòmics</label>
+        <textarea className="input h-20 resize-none" value={data.economic_outcome} onChange={e => set('economic_outcome', e.target.value)} />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div><label className="label">Exp. Pacient (0-10)</label>
+          <input type="number" min={0} max={10} className="input" value={data.patient_experience} onChange={e => set('patient_experience', Number(e.target.value))} /></div>
+        <div><label className="label">Satisf. Prof. (0-10)</label>
+          <input type="number" min={0} max={10} className="input" value={data.professional_satisfaction} onChange={e => set('professional_satisfaction', Number(e.target.value))} /></div>
+        <div><label className="label">Sostenibilitat (0-10)</label>
+          <input type="number" min={0} max={10} className="input" value={data.sustainability_score} onChange={e => set('sustainability_score', Number(e.target.value))} /></div>
+      </div>
+      <div>
+        <label className="label">Retorn social (SROI)</label>
+        <input className="input" placeholder="p.ex. €3.2 per cada €1 invertit" value={data.social_return} onChange={e => set('social_return', e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onSave(data)} className="btn-primary flex-1 justify-center">
+          <Check size={14} /> Guardar avaluació
+        </button>
+        {onCancel && <button type="button" onClick={onCancel} className="btn-secondary">Cancel·lar</button>}
+      </div>
+    </div>
+  )
+}
+
+function EvaluationTab({ project, evalRes, onSave }) {
+  const [editing, setEditing] = useState(false)
+
+  if (!evalRes || editing) {
+    return (
+      <div className="space-y-4">
+        {project.current_phase < 6 && !evalRes && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+            El projecte encara no ha arribat a la fase 6 (Avaluació), però pots registrar dades igualment.
+          </div>
+        )}
+        <EvaluationForm initial={evalRes || {}} onSave={d => { onSave(d); setEditing(false) }} onCancel={evalRes ? () => setEditing(false) : null} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex justify-end">
+        <button type="button" onClick={() => setEditing(true)} className="btn-secondary text-xs py-1.5 px-3">Editar avaluació</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-green-50 rounded-xl p-4">
+          <p className="label text-green-700">Resultats Clínics</p>
+          <p className="text-sm text-gray-700 mt-1 leading-relaxed">{evalRes.clinical_outcome}</p>
+        </div>
+        <div className="bg-blue-50 rounded-xl p-4">
+          <p className="label text-blue-700">Resultats Econòmics</p>
+          <p className="text-sm text-gray-700 mt-1 leading-relaxed">{evalRes.economic_outcome}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Exp. Pacient',   value: evalRes.patient_experience },
+          { label: 'Satisf. Prof.',  value: evalRes.professional_satisfaction },
+          { label: 'Sostenibilitat', value: evalRes.sustainability_score },
+        ].map(m => (
+          <div key={m.label} className="bg-gray-50 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-althaia-600">{m.value}/10</p>
+            <p className="text-xs text-gray-500 mt-1">{m.label}</p>
+          </div>
+        ))}
+        <div className="bg-purple-50 rounded-xl p-4 text-center">
+          <p className="text-sm font-bold text-purple-700">{evalRes.social_return}</p>
+          <p className="text-xs text-gray-500 mt-1">SROI</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Feedback Tab ─────────────────────────────────────────────────────────────
+const FEEDBACK_TYPES = [
+  { value: 'clinical', label: 'Clínic',  color: 'bg-blue-50 border-blue-200',  badge: 'bg-blue-100 text-blue-700'  },
+  { value: 'patient',  label: 'Pacient', color: 'bg-green-50 border-green-200',badge: 'bg-green-100 text-green-700'},
+  { value: 'admin',    label: 'Gestió',  color: 'bg-gray-50 border-gray-200',  badge: 'bg-gray-100 text-gray-600'  },
+]
+
+function FeedbackTab({ project, feedbackList, onAdd, onDelete }) {
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ type: 'clinical', message: '' })
+
+  const handleAdd = () => {
+    if (!form.message.trim()) return
+    onAdd(project.id, form)
+    setForm({ type: 'clinical', message: '' })
+    setShowForm(false)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-gray-700">Feedback rebut</h4>
+        <button type="button" onClick={() => setShowForm(s => !s)} className="btn-primary text-xs py-1.5 px-3">
+          <Plus size={13} /> Afegir feedback
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="border-2 border-dashed border-althaia-200 rounded-xl p-4 space-y-3 bg-althaia-50/30">
+          <div className="flex gap-2">
+            {FEEDBACK_TYPES.map(t => (
+              <button key={t.value} type="button" onClick={() => setForm(f => ({ ...f, type: t.value }))}
+                className={clsx('flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                  form.type === t.value ? 'bg-althaia-600 text-white border-althaia-600' : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
+                )}>{t.label}</button>
+            ))}
+          </div>
+          <textarea className="input h-20 resize-none text-sm" placeholder="Missatge de feedback..." autoFocus
+            value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} />
+          <div className="flex gap-2">
+            <button type="button" onClick={handleAdd} disabled={!form.message.trim()} className="btn-primary flex-1 justify-center disabled:opacity-40">
+              <Check size={14} /> Afegir
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel·lar</button>
+          </div>
+        </div>
+      )}
+
+      {feedbackList.length === 0 && !showForm && (
+        <p className="text-sm text-gray-400 text-center py-8">Sense feedback registrat</p>
+      )}
+      {feedbackList.map(f => {
+        const meta = FEEDBACK_TYPES.find(t => t.value === f.type) || FEEDBACK_TYPES[0]
+        return (
+          <div key={f.id} className={clsx('border rounded-xl p-4', meta.color)}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-xs font-bold border">👤</div>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">{f.user_id ? `Usuari #${f.user_id}` : 'Anònim'}</p>
+                <p className="text-xs text-gray-400">{f.created_at}</p>
+              </div>
+              <span className={clsx('badge ml-auto text-xs', meta.badge)}>{meta.label}</span>
+              {f.isCustom && (
+                <button type="button" onClick={() => onDelete(project.id, f.id)}
+                  className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-gray-700">"{f.message}"</p>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectDetailPage() {
   const { id } = useParams()
@@ -637,6 +909,7 @@ export default function ProjectDetailPage() {
     getHistoryForProject, getIdeasForProject,
     addTask, updateTask, deleteTask,
     addTimelineEvent, deleteTimelineEvent,
+    addFeedback, deleteFeedback,
   } = useApp()
 
   const project = getProjectById(id)
@@ -712,60 +985,78 @@ export default function ProjectDetailPage() {
       </Modal>
 
       {/* Project header */}
-      <div className="card p-5 mb-5">
-        <div className="flex flex-wrap items-start gap-4">
+      <div className="card p-6 mb-5">
+
+        {/* Fila 1: icona + títol + badges */}
+        <div className="flex items-start gap-4 mb-4">
           <div className={clsx('w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0', pc?.bg)}>
             {phase?.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h2 className="text-lg font-bold text-gray-900">{project.title}</h2>
-              {project.tags?.map(t => (
-                <span key={t} className="badge bg-gray-100 text-gray-500 text-xs"><Tag size={10} className="mr-1" />{t}</span>
-              ))}
-            </div>
-            <p className="text-sm text-gray-500 mb-3 leading-relaxed">{project.description}</p>
-            <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-xl font-bold text-gray-900 leading-tight mb-2">{project.title}</h2>
+            <div className="flex flex-wrap items-center gap-2">
               <span className={clsx('badge', pc?.bg, pc?.text)}>{phase?.icon} {phase?.name}</span>
               <StatusBadge status={project.status} />
               <PriorityBadge priority={project.priority} />
               {project.dictamen && (
                 <span className={clsx('badge text-xs',
-                  project.dictamen === 'favorable' ? 'bg-green-100 text-green-700' :
+                  project.dictamen === 'favorable'    ? 'bg-green-100 text-green-700' :
                   project.dictamen === 'condicionada' ? 'bg-yellow-100 text-yellow-700' :
                   project.dictamen === 'reformulacio' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
                 )}>
                   {project.dictamen === 'favorable' ? '✅' : project.dictamen === 'condicionada' ? '⚠️' : project.dictamen === 'reformulacio' ? '🔄' : '❌'} {project.dictamen}
                 </span>
               )}
-              {project.tags?.includes('IA') && <span className="badge bg-violet-100 text-violet-700">🤖 IA</span>}
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 shrink-0 text-sm">
-            <div className="flex items-center gap-2 text-gray-500">
-              <Users size={14} className="text-gray-400" />
-              <span>{project.owner_name || 'No assignat'}</span>
-            </div>
-            <div className="flex items-center gap-2 text-gray-500">
-              <Calendar size={14} className="text-gray-400" />
-              <span>{project.created_at}</span>
-            </div>
-            {project.budget > 0 && (
-              <div className="flex items-center gap-2 text-gray-500">
-                <Euro size={14} className="text-gray-400" />
-                <span>€{project.budget.toLocaleString()}</span>
-              </div>
-            )}
-            {project.validation_score > 0 && (
-              <div className="flex items-center gap-2 text-althaia-600 font-medium">
-                <ShieldCheck size={14} />
-                <span>{project.validation_score}/10 validació</span>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Phase progress */}
+        {/* Fila 2: descripció — amplada completa */}
+        {project.description && (
+          <p className="text-sm text-gray-600 leading-relaxed mb-4">{project.description}</p>
+        )}
+
+        {/* Fila 3: etiquetes */}
+        {project.tags?.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {project.tags.map(t => (
+              <span key={t} className="badge bg-gray-100 text-gray-500 text-xs">
+                <Tag size={10} className="mr-1" />{t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Fila 4: meta (responsable, data, pressupost) */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-500 border-t border-gray-100 pt-4">
+          {project.owner_name && (
+            <span className="flex items-center gap-1.5">
+              <Users size={13} className="text-gray-400 shrink-0" />
+              {project.owner_name}
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Calendar size={13} className="text-gray-400 shrink-0" />
+            {(() => {
+              try { return new Intl.DateTimeFormat('ca-ES', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(project.created_at)) }
+              catch { return project.created_at }
+            })()}
+          </span>
+          {project.budget > 0 && (
+            <span className="flex items-center gap-1.5">
+              <Euro size={13} className="text-gray-400 shrink-0" />
+              €{project.budget.toLocaleString()}
+            </span>
+          )}
+          {project.validation_score > 0 && (
+            <span className="flex items-center gap-1.5 text-althaia-600 font-medium">
+              <ShieldCheck size={13} className="shrink-0" />
+              {project.validation_score}/10 validació
+            </span>
+          )}
+        </div>
+
+        {/* Fila 5: progrés de fases */}
         <div className="mt-5">
           <div className="flex items-center gap-1">
             {PHASES.map((ph, i) => {
@@ -860,84 +1151,14 @@ export default function ProjectDetailPage() {
 
           {/* ── Pilot ── */}
           {tab === 'pilot' && (
-            pilot ? (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Professionals', value: pilot.professionals_involved, color: 'text-althaia-600' },
-                    { label: 'Pacients',      value: pilot.patients_involved,      color: 'text-teal-600'    },
-                    { label: 'Adopció',       value: `${pilot.adoption_rate}%`,    color: pilot.adoption_rate >= 70 ? 'text-green-600' : 'text-orange-600' },
-                    { label: 'Satisfacció',   value: `${pilot.satisfaction_score}/10`, color: 'text-purple-600' },
-                  ].map(kpi => (
-                    <div key={kpi.label} className="bg-gray-50 rounded-xl p-4 text-center">
-                      <p className={clsx('text-2xl font-bold', kpi.color)}>{kpi.value}</p>
-                      <p className="text-xs text-gray-500 mt-1">{kpi.label}</p>
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <p className="label">Progrés del pilot</p>
-                  <div className="score-bar mt-2">
-                    <div className="score-bar-fill bg-althaia-500" style={{ width: `${pilot.progress}%` }} />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">{pilot.progress}% completat · {pilot.start_date} → {pilot.end_date || 'en curs'}</p>
-                </div>
-                <div>
-                  <p className="label">Resultats preliminars</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{pilot.preliminary_results}</p>
-                </div>
-                {pilot.incidents > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                    <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-800">{pilot.incidents} incidències registrades</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-10 text-gray-400">
-                <FlaskConical size={36} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Sense dades de pilot. El projecte ha d'arribar a la fase 5 (Pilot).</p>
-              </div>
-            )
+            <PilotTab project={project} pilot={pilot}
+              onSave={(data) => updateProject(project.id, { pilot_data: data })} />
           )}
 
           {/* ── Evaluation ── */}
           {tab === 'evaluation' && (
-            evalRes ? (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-green-50 rounded-xl p-4">
-                    <p className="label text-green-700">Resultats Clínics</p>
-                    <p className="text-sm text-gray-700 mt-1 leading-relaxed">{evalRes.clinical_outcome}</p>
-                  </div>
-                  <div className="bg-blue-50 rounded-xl p-4">
-                    <p className="label text-blue-700">Resultats Econòmics</p>
-                    <p className="text-sm text-gray-700 mt-1 leading-relaxed">{evalRes.economic_outcome}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Exp. Pacient',   value: evalRes.patient_experience },
-                    { label: 'Satisf. Prof.',  value: evalRes.professional_satisfaction },
-                    { label: 'Sostenibilitat', value: evalRes.sustainability_score },
-                  ].map(m => (
-                    <div key={m.label} className="bg-gray-50 rounded-xl p-4 text-center">
-                      <p className="text-2xl font-bold text-althaia-600">{m.value}/10</p>
-                      <p className="text-xs text-gray-500 mt-1">{m.label}</p>
-                    </div>
-                  ))}
-                  <div className="bg-purple-50 rounded-xl p-4 text-center">
-                    <p className="text-sm font-bold text-purple-700">{evalRes.social_return}</p>
-                    <p className="text-xs text-gray-500 mt-1">SROI</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-10 text-gray-400">
-                <TrendingUp size={36} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Sense avaluació. El projecte ha de completar la fase Pilot.</p>
-              </div>
-            )
+            <EvaluationTab project={project} evalRes={evalRes}
+              onSave={(data) => updateProject(project.id, { evaluation_data: data })} />
           )}
 
           {/* ── Ideas ── */}
@@ -999,26 +1220,7 @@ export default function ProjectDetailPage() {
 
           {/* ── Feedback ── */}
           {tab === 'feedback' && (
-            <div className="space-y-3">
-              {fb.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Sense feedback registrat</p>}
-              {fb.map(f => {
-                const typeColor = f.type === 'clinical' ? 'bg-blue-50 border-blue-200' : f.type === 'patient' ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
-                const typeBadge = f.type === 'clinical' ? 'bg-blue-100 text-blue-700' : f.type === 'patient' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                return (
-                  <div key={f.id} className={clsx('border rounded-xl p-4', typeColor)}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-xs font-bold border">👤</div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-800">{f.user_id ? `Usuari #${f.user_id}` : 'Pacient anònim'}</p>
-                        <p className="text-xs text-gray-400">{f.created_at}</p>
-                      </div>
-                      <span className={clsx('badge ml-auto text-xs', typeBadge)}>{f.type}</span>
-                    </div>
-                    <p className="text-sm text-gray-700">"{f.message}"</p>
-                  </div>
-                )
-              })}
-            </div>
+            <FeedbackTab project={project} feedbackList={fb} onAdd={addFeedback} onDelete={deleteFeedback} />
           )}
 
           {/* ── Timeline ── */}

@@ -58,11 +58,3 @@ export const EVALUATION_CRITERIA = [
   { key: 'strategy',         label: 'Estratègia',         weight: 0.05 },
 ]
 
-export const AI_ACTIONS = [
-  { id: 'generate_ideas',    icon: '💡', label: 'Generar idees',           desc: 'Propostes per al projecte seleccionat' },
-  { id: 'risk_detect',       icon: '⚠️', label: 'Detectar riscos',         desc: 'Analitza projectes en risc de bloqueig' },
-  { id: 'prioritize',        icon: '🎯', label: 'Recomanar priorització',  desc: 'Ordena projectes per impacte potencial' },
-  { id: 'summarize',         icon: '📝', label: 'Resumir projecte',        desc: 'Resum executiu del projecte' },
-  { id: 'analyze_pilot',     icon: '🧪', label: 'Analitzar pilot',         desc: 'Interpretació de resultats del pilot' },
-  { id: 'bottleneck',        icon: '🔍', label: 'Detectar colls d\'ampolla', desc: 'Fases amb major temps de bloqueig' },
-]

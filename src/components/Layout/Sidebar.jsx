@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, GitBranch, FolderOpen, Plus,
-  Bot, Users, Settings, Activity, LogOut, ShieldCheck, User, FlaskConical, Upload,
+  LayoutDashboard, GitBranch, FolderOpen,
+  Users, Settings, Activity, LogOut, ShieldCheck, User, FlaskConical, Upload, Lightbulb,
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import clsx from 'clsx'
@@ -10,10 +10,10 @@ const nav = [
   { to: '/',         icon: LayoutDashboard, label: 'Dashboard',    end: true },
   { to: '/pipeline', icon: GitBranch,       label: 'Pipeline'              },
   { to: '/projects', icon: FolderOpen,      label: 'Projectes'             },
-  { to: '/ai',       icon: Bot,             label: 'Assistent IA'          },
+  { to: '/ideas',    icon: Lightbulb,       label: 'Banc d\'Idees'         },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { currentUser, isAdmin, projects, notifications, onLogout } = useApp()
   const total  = projects.length
   const active = projects.filter(p => p.status === 'active').length
@@ -23,7 +23,11 @@ export default function Sidebar() {
     : '??'
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-white border-r border-gray-200 flex flex-col z-30">
+    <aside className={clsx(
+      'fixed left-0 top-0 h-screen w-60 bg-white border-r border-gray-200 flex flex-col z-30',
+      'transition-transform duration-200',
+      isOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'
+    )}>
 
       {/* Logo */}
       <div className="px-5 py-5 border-b border-gray-100">
@@ -54,7 +58,7 @@ export default function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         <p className="px-2 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Principal</p>
         {nav.map(({ to, icon: Icon, label, end }) => (
-          <NavLink key={to} to={to} end={end}
+          <NavLink key={to} to={to} end={end} onClick={onClose}
             className={({ isActive }) =>
               `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
             }
@@ -67,7 +71,7 @@ export default function Sidebar() {
         {/* Crear innovació (wizard guiat) */}
         <div className="pt-4">
           <p className="px-2 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Crear</p>
-          <NavLink to="/wizard"
+          <NavLink to="/new"
             className={({ isActive }) =>
               `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
             }
@@ -83,14 +87,6 @@ export default function Sidebar() {
           >
             <Upload size={17} />
             <span className="flex-1">Importar document</span>
-          </NavLink>
-          <NavLink to="/new"
-            className={({ isActive }) =>
-              `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
-            }
-          >
-            <Plus size={17} />
-            <span className="flex-1">Afegir projecte</span>
           </NavLink>
         </div>
 

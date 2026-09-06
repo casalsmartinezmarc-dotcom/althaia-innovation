@@ -3,7 +3,7 @@ import Layout from '../components/Layout/Layout'
 import { useApp } from '../context/AppContext'
 import { PHASES, PHASE_COLORS } from '../data/constants'
 import { StatusBadge } from '../components/shared/Badge'
-import { Users, ArrowRight, Plus } from 'lucide-react'
+import { User, ArrowRight, Plus } from 'lucide-react'
 import clsx from 'clsx'
 
 function ProjectCard({ project }) {
@@ -15,11 +15,13 @@ function ProjectCard({ project }) {
     >
       <p className="text-xs font-semibold text-gray-900 leading-snug mb-2 line-clamp-2">{project.title}</p>
       <p className="text-xs text-gray-400 mb-3">{project.service}</p>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 text-xs text-gray-500">
-          <Users size={11} />
-          <span>{project.team?.length || 1}</span>
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        {project.owner_name ? (
+          <div className="flex items-center gap-1 text-xs text-gray-500 min-w-0">
+            <User size={11} className="shrink-0" />
+            <span className="truncate">{project.owner_name}</span>
+          </div>
+        ) : <span />}
         <StatusBadge status={project.status} />
       </div>
       {project.priority === 'alta' && (

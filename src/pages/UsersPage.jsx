@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout/Layout'
 import { useApp } from '../context/AppContext'
+import { dbWrite } from '../lib/dbWrite'
+import { getLocalOnlyUsers, updateLocalUser, deleteLocalUser } from '../data/auth'
 import { ShieldCheck, User, ToggleLeft, ToggleRight, Trash2, ChevronRight, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import Modal from '../components/shared/Modal'
@@ -13,10 +15,34 @@ const roleStyle = {
   professional: { bg: 'bg-teal-100',    text: 'text-teal-700',    icon: User        },
 }
 
+const ADMIN_ROW = { id: 'admin', name: 'Administrador', email: 'admin@althaia.cat', role: 'admin', service: 'Administració', active: true, created_at: '' }
+
 export default function UsersPage() {
   const navigate = useNavigate()
-  const { isAdmin, getAllRegisteredUsers, toggleUserActive, changeUserRole, deleteUser, projects } = useApp()
+  const { isAdmin, projects } = useApp()
+  const [users, setUsers]     = useState([ADMIN_ROW])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null) // {id, name}
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true); setLoadError('')
+    const localUsers = getLocalOnlyUsers()
+    try {
+      const res  = await fetch('/api/users-list')
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `Error ${res.status}`)
+      setUsers([ADMIN_ROW, ...(json.users || []), ...localUsers])
+    } catch (err) {
+      setLoadError(localUsers.length > 0
+        ? `${err.message} — mostrant només comptes locals d'aquest navegador.`
+        : err.message)
+      setUsers([ADMIN_ROW, ...localUsers])
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { loadUsers() }, [loadUsers])
 
   if (!isAdmin) {
     return (
@@ -31,20 +57,43 @@ export default function UsersPage() {
     )
   }
 
-  const users = getAllRegisteredUsers()
+  const projectCount = (userName) =>
+    projects.filter(p => p.owner_name && p.owner_name.trim().toLowerCase() === userName.trim().toLowerCase()).length
 
-  const projectCount = (userId) =>
-    projects.filter(p => p.owner_name && p.owner_id === userId).length
+  const toggleUserActive = async (u) => {
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, active: !x.active } : x))
+    if (u.localOnly) { updateLocalUser(u.id, { active: !u.active }); return }
+    try { await dbWrite('app_users', 'update', { id: u.id, data: { active: !u.active } }) }
+    catch (err) { setLoadError(err.message); loadUsers() }
+  }
 
-  const handleDelete = () => {
-    if (confirmDelete) {
-      deleteUser(confirmDelete.id)
-      setConfirmDelete(null)
-    }
+  const changeUserRole = async (id, newRole) => {
+    const u = users.find(x => x.id === id)
+    setUsers(prev => prev.map(x => x.id === id ? { ...x, role: newRole } : x))
+    if (u?.localOnly) { updateLocalUser(id, { role: newRole }); return }
+    try { await dbWrite('app_users', 'update', { id, data: { role: newRole } }) }
+    catch (err) { setLoadError(err.message); loadUsers() }
+  }
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return
+    const id = confirmDelete.id
+    const u  = users.find(x => x.id === id)
+    setUsers(prev => prev.filter(x => x.id !== id))
+    setConfirmDelete(null)
+    if (u?.localOnly) { deleteLocalUser(id); return }
+    try { await dbWrite('app_users', 'delete', { id }) }
+    catch (err) { setLoadError(err.message); loadUsers() }
   }
 
   return (
     <Layout title="Gestió d'usuaris" subtitle={`${users.length} comptes registrades`}>
+
+      {loadError && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+          {loadError}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -69,6 +118,9 @@ export default function UsersPage() {
           </span>
         </div>
 
+        {loading ? (
+          <div className="py-12 text-center text-gray-400 text-sm">Carregant usuaris...</div>
+        ) : (
         <div className="divide-y divide-gray-50">
           {users.map(u => {
             const rs = roleStyle[u.role] || roleStyle.professional
@@ -96,9 +148,14 @@ export default function UsersPage() {
                     {!u.active && (
                       <span className="badge bg-red-100 text-red-600 text-xs">Desactivat</span>
                     )}
+                    {u.localOnly && (
+                      <span className="badge bg-amber-100 text-amber-700 text-xs" title="Registrat abans de configurar el backend — només visible en aquest navegador">
+                        Només local
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-400 truncate">{u.email} · {u.service}</p>
-                  <p className="text-xs text-gray-400">{u.created_at}</p>
+                  <p className="text-xs text-gray-400">{u.created_at} · {projectCount(u.name)} projecte{projectCount(u.name) === 1 ? '' : 's'}</p>
                 </div>
 
                 {/* Rol selector */}
@@ -123,7 +180,7 @@ export default function UsersPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {/* Toggle actiu */}
                     <button
-                      onClick={() => toggleUserActive(u.id)}
+                      onClick={() => toggleUserActive(u)}
                       className={clsx('p-1.5 rounded-lg transition-colors', u.active ? 'text-green-500 hover:bg-green-50' : 'text-gray-300 hover:bg-gray-100')}
                       title={u.active ? 'Desactivar compte' : 'Activar compte'}
                     >
@@ -150,6 +207,7 @@ export default function UsersPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Llegenda */}

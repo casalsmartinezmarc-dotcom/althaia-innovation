@@ -1,48 +1,54 @@
 import { useState } from 'react'
-import { Activity, Eye, EyeOff, Lock, Mail, User, Briefcase, ArrowLeft } from 'lucide-react'
+import { Activity, Eye, EyeOff, Lock, Mail, User, Briefcase, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { login, register } from '../data/auth'
 import { SERVICES } from '../data/constants'
 import clsx from 'clsx'
 
 export default function LoginPage({ onLogin }) {
-  const [mode, setMode]         = useState('login') // 'login' | 'register'
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName]         = useState('')
-  const [service, setService]   = useState('')
-  const [confirm, setConfirm]   = useState('')
-  const [showPass, setShowPass] = useState(false)
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [mode, setMode]           = useState('login') // 'login' | 'register' | 'admin'
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
+  const [adminPass, setAdminPass] = useState('')
+  const [name, setName]           = useState('')
+  const [service, setService]     = useState('')
+  const [confirm, setConfirm]     = useState('')
+  const [showPass, setShowPass]   = useState(false)
+  const [error, setError]         = useState('')
+  const [loading, setLoading]     = useState(false)
 
   const reset = (m) => {
     setMode(m); setError('')
-    setEmail(''); setPassword(''); setName(''); setService(''); setConfirm('')
+    setEmail(''); setPassword(''); setName(''); setService(''); setConfirm(''); setAdminPass('')
   }
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError(''); setLoading(true)
-    setTimeout(() => {
-      const result = login(email, password)
-      if (result.ok) onLogin(result.user)
-      else setError(result.error)
-      setLoading(false)
-    }, 500)
+    const result = await login(email, password)
+    if (result.ok) onLogin(result.user)
+    else setError(result.error)
+    setLoading(false)
   }
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault()
     setError('')
     if (password !== confirm) { setError('Les contrasenyes no coincideixen.'); return }
     if (password.length < 6)  { setError('La contrasenya ha de tenir mínim 6 caràcters.'); return }
     setLoading(true)
-    setTimeout(() => {
-      const result = register({ name, email, password, service })
-      if (result.ok) onLogin(result.user)
-      else setError(result.error)
-      setLoading(false)
-    }, 500)
+    const result = await register({ name, email, password, service })
+    if (result.ok) onLogin(result.user)
+    else setError(result.error)
+    setLoading(false)
+  }
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault()
+    setError(''); setLoading(true)
+    const result = await login('admin@althaia.cat', adminPass)
+    if (result.ok) onLogin(result.user)
+    else setError(result.error)
+    setLoading(false)
   }
 
   return (
@@ -50,31 +56,37 @@ export default function LoginPage({ onLogin }) {
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-slide-in">
 
         {/* Header */}
-        <div className="bg-althaia-600 px-8 py-7 text-center">
-          <div className="w-13 h-13 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-3 w-12 h-12">
-            <Activity size={26} className="text-white" />
+        <div className={clsx('px-8 py-7 text-center', mode === 'admin' ? 'bg-gray-800' : 'bg-althaia-600')}>
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            {mode === 'admin' ? <ShieldCheck size={26} className="text-white" /> : <Activity size={26} className="text-white" />}
           </div>
-          <h1 className="text-xl font-bold text-white">Althaia Innovació</h1>
-          <p className="text-althaia-200 text-sm mt-0.5">Centre de Comandament</p>
+          <h1 className="text-xl font-bold text-white">
+            {mode === 'admin' ? 'Accés Administrador' : 'Althaia Innovació'}
+          </h1>
+          <p className={clsx('text-sm mt-0.5', mode === 'admin' ? 'text-gray-300' : 'text-althaia-200')}>
+            {mode === 'admin' ? 'Introdueix la contrasenya d\'administrador' : 'Centre de Comandament'}
+          </p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100">
-          {['login', 'register'].map(m => (
-            <button key={m} onClick={() => reset(m)}
-              className={clsx(
-                'flex-1 py-3 text-sm font-medium transition-colors',
-                mode === m
-                  ? 'text-althaia-600 border-b-2 border-althaia-600'
-                  : 'text-gray-400 hover:text-gray-600'
-              )}
-            >
-              {m === 'login' ? 'Iniciar sessió' : 'Crear compte'}
-            </button>
-          ))}
-        </div>
+        {/* Tabs — ocults en mode admin */}
+        {mode !== 'admin' && (
+          <div className="flex border-b border-gray-100">
+            {['login', 'register'].map(m => (
+              <button key={m} onClick={() => reset(m)}
+                className={clsx(
+                  'flex-1 py-3 text-sm font-medium transition-colors',
+                  mode === m
+                    ? 'text-althaia-600 border-b-2 border-althaia-600'
+                    : 'text-gray-400 hover:text-gray-600'
+                )}
+              >
+                {m === 'login' ? 'Iniciar sessió' : 'Crear compte'}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* ── LOGIN ── */}
+        {/* ── LOGIN NORMAL ── */}
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="px-7 py-6 space-y-4">
             <div>
@@ -107,6 +119,50 @@ export default function LoginPage({ onLogin }) {
                 Crea'n un
               </button>
             </p>
+            <button
+              type="button"
+              onClick={() => reset('admin')}
+              className="w-full text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg py-2 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+            >
+              Accés ràpid administrador
+            </button>
+          </form>
+        )}
+
+        {/* ── ADMIN LOGIN ── */}
+        {mode === 'admin' && (
+          <form onSubmit={handleAdminLogin} className="px-7 py-6 space-y-4">
+            <div>
+              <label className="label">Compte</label>
+              <div className="relative">
+                <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="email" className="input pl-9 bg-gray-50 text-gray-500 cursor-not-allowed"
+                  value="admin@althaia.cat" readOnly />
+              </div>
+            </div>
+            <div>
+              <label className="label">Contrasenya</label>
+              <div className="relative">
+                <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type={showPass ? 'text' : 'password'} className="input pl-9 pr-10"
+                  placeholder="••••••••" value={adminPass} onChange={e => setAdminPass(e.target.value)}
+                  autoFocus required />
+                <button type="button" onClick={() => setShowPass(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+            {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-60">
+              <ShieldCheck size={15} />
+              {loading ? 'Entrant...' : 'Entrar com a administrador'}
+            </button>
+            <button type="button" onClick={() => reset('login')}
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1">
+              <ArrowLeft size={12} />
+              Tornar a l'inici de sessió
+            </button>
           </form>
         )}
 
@@ -161,6 +217,7 @@ export default function LoginPage({ onLogin }) {
             </p>
           </form>
         )}
+
       </div>
     </div>
   )

@@ -329,19 +329,19 @@ export const evaluations = {
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 export const tasks = {
   1: [
-    { id: 1, title: 'Validar model amb dataset extern', assigned_to: 1, status: 'in_progress', deadline: '2024-12-01', priority: 'alta' },
-    { id: 2, title: 'Reunió comitè ètica',              assigned_to: 2, status: 'completed',   deadline: '2024-10-15', priority: 'alta' },
-    { id: 3, title: 'Informe intermedi de resultats',   assigned_to: 7, status: 'pending',     deadline: '2024-12-10', priority: 'mitja' },
-    { id: 4, title: 'Formació staff UCI tercera ronda', assigned_to: 8, status: 'in_progress', deadline: '2024-11-20', priority: 'mitja' },
+    { id: 1, title: 'Validar model amb dataset extern', assigned_to: 'Dra. Maria García', status: 'in_progress', due_date: '2024-12-01', priority: 'alta' },
+    { id: 2, title: 'Reunió comitè ètica',              assigned_to: 'Jordi Puig',        status: 'completed',   due_date: '2024-10-15', priority: 'alta' },
+    { id: 3, title: 'Informe intermedi de resultats',   assigned_to: 'Marta Soler',       status: 'pending',     due_date: '2024-12-10', priority: 'mitja' },
+    { id: 4, title: 'Formació staff UCI tercera ronda', assigned_to: 'Dr. Pau Roca',      status: 'in_progress', due_date: '2024-11-20', priority: 'mitja' },
   ],
   2: [
-    { id: 5, title: 'Desplegament CAP Manresa Nord',    assigned_to: 5, status: 'in_progress', deadline: '2024-11-30', priority: 'alta' },
-    { id: 6, title: 'Integració amb SISAP',             assigned_to: 5, status: 'pending',     deadline: '2024-12-20', priority: 'alta' },
-    { id: 7, title: 'Formació cardiòlegs - 2a ronda',   assigned_to: 1, status: 'completed',   deadline: '2024-10-01', priority: 'mitja' },
+    { id: 5, title: 'Desplegament CAP Manresa Nord',    assigned_to: 'Laura Mas',         status: 'in_progress', due_date: '2024-11-30', priority: 'alta' },
+    { id: 6, title: 'Integració amb SISAP',             assigned_to: 'Laura Mas',         status: 'pending',     due_date: '2024-12-20', priority: 'alta' },
+    { id: 7, title: 'Formació cardiòlegs - 2a ronda',   assigned_to: 'Dra. Maria García', status: 'completed',   due_date: '2024-10-01', priority: 'mitja' },
   ],
   3: [
-    { id: 8, title: 'Revisió ontologia de símptomes',   assigned_to: 2, status: 'in_progress', deadline: '2024-11-25', priority: 'alta' },
-    { id: 9, title: 'Integrar API triatge amb HCE',     assigned_to: 5, status: 'pending',     deadline: '2025-01-15', priority: 'alta' },
+    { id: 8, title: 'Revisió ontologia de símptomes',   assigned_to: 'Jordi Puig',        status: 'in_progress', due_date: '2024-11-25', priority: 'alta' },
+    { id: 9, title: 'Integrar API triatge amb HCE',     assigned_to: 'Laura Mas',         status: 'pending',     due_date: '2025-01-15', priority: 'alta' },
   ],
 }
 
