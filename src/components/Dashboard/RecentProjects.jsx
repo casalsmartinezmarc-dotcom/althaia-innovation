@@ -34,8 +34,8 @@ export default function RecentProjects() {
                 <p className="text-xs text-gray-400 mt-0.5">{p.service} · {p.updated_at}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className={clsx('badge text-xs', pc?.bg, pc?.text)}>
-                  {phase?.icon} {phase?.name}
+                <span className={clsx('badge text-xs gap-1', pc?.bg, pc?.text)}>
+                  {phase?.icon && <phase.icon size={12} />} {phase?.name}
                 </span>
                 <StatusBadge status={p.status} />
               </div>

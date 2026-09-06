@@ -11,8 +11,9 @@ import {
   FlaskConical, BarChart2, TrendingUp,
   AlertCircle, Clock, Tag, ArrowRight, Trash2,
   Plus, Check, ShieldCheck, ChevronDown, ChevronUp,
-  Flag, Milestone,
+  Flag, Milestone, X, RotateCcw, MapPin, User as UserIcon, Star,
 } from 'lucide-react'
+import { IconTarget, IconPerson, IconShield, IconLink, IconTrendUp, IconRocket, IconFlagMark, IconCalendar, IconPackage, IconNote } from '../components/icons/CustomIcons.jsx'
 import clsx from 'clsx'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
@@ -137,15 +138,16 @@ function ENoLLSection({ project, onUpdate }) {
               )
             })}
           </div>
-          <div className={clsx('mt-4 rounded-xl p-3 text-center text-sm font-semibold',
+          <div className={clsx('mt-4 rounded-xl p-3 flex items-center justify-center gap-1.5 text-sm font-semibold',
             pct === 100 ? 'bg-green-50 text-green-700' :
             pct >= 70 ? 'bg-blue-50 text-blue-700' :
             pct >= 40 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'
           )}>
-            {pct === 100 ? '✅ Compliment total ENoLL' :
-             pct >= 70 ? `✓ Bon nivell ENoLL (${pct}%)` :
-             pct >= 40 ? `⚠ Compliment parcial ENoLL (${pct}%)` :
-             `❌ Compliment baix ENoLL (${pct}%)`}
+            {pct === 100 ? <Check size={15} /> : pct >= 70 ? <Check size={15} /> : pct >= 40 ? <AlertCircle size={15} /> : <X size={15} />}
+            {pct === 100 ? 'Compliment total ENoLL' :
+             pct >= 70 ? `Bon nivell ENoLL (${pct}%)` :
+             pct >= 40 ? `Compliment parcial ENoLL (${pct}%)` :
+             `Compliment baix ENoLL (${pct}%)`}
           </div>
         </div>
       )}
@@ -299,11 +301,16 @@ function TasksTab({ project, tasks, onAdd, onToggle, onDelete }) {
 }
 
 // ─── Validation SLL Tab ──────────────────────────────────────────────────────
+const CRITERI_COLOR = {
+  blue: 'text-blue-500', green: 'text-green-500', red: 'text-red-500',
+  orange: 'text-orange-500', purple: 'text-purple-500', teal: 'text-teal-500',
+}
+
 const SLL_CRITERIA = [
   {
     key: 'necessitat',
     label: '1. Necessitat real',
-    icon: '🎯',
+    icon: IconTarget,
     color: 'blue',
     description: 'Verifica que la proposta respon a problemàtiques objectives. Inclou: problema concret que es pretén resoldre, rellevància social o assistencial del repte, perfil real de persones beneficiàries, intensitat i recurrència de la necessitat, inexistència o insuficiència de solucions alternatives.',
     questions: ['Quins usuaris finals s\'han implicat?', 'Quin % de professionals confirma la necessitat?', 'Existeixen alternatives suficients?'],
@@ -311,7 +318,7 @@ const SLL_CRITERIA = [
   {
     key: 'usabilitat',
     label: '2. Usabilitat',
-    icon: '👤',
+    icon: IconPerson,
     color: 'green',
     description: 'Avalua si la solució pot ser utilitzada de manera efectiva, comprensible i autònoma. Inclou: facilitat d\'aprenentatge, claredat de funcionament, comprensibilitat de la interfície, accessibilitat física i cognitiva, càrrega d\'esforç requerida, nivell d\'acceptació percebuda.',
     questions: ['Quant temps requereix la formació inicial?', 'La interfície és accessible per a persones grans o amb diversitat funcional?', 'Quin és el nivell d\'acceptació percebuda?'],
@@ -319,7 +326,7 @@ const SLL_CRITERIA = [
   {
     key: 'seguretat',
     label: '3. Seguretat',
-    icon: '🛡️',
+    icon: IconShield,
     color: 'red',
     description: 'Garanteix que no s\'introdueixen riscos físics, funcionals, digitals o organitzatius. Inclou: absència de risc d\'ús, comportament estable davant incidències, tolerància a errors, capacitat de resposta davant fallades, protecció de la informació, compliment RGPD i privacitat.',
     questions: ['Quins riscos d\'ús s\'han identificat i mitigat?', 'Compleix RGPD i normativa clínica?', 'Com respon el sistema davant fallades?'],
@@ -327,7 +334,7 @@ const SLL_CRITERIA = [
   {
     key: 'interop',
     label: '4. Interoperabilitat',
-    icon: '🔗',
+    icon: IconLink,
     color: 'orange',
     description: 'Verifica que la solució pot integrar-se dins l\'ecosistema tecnològic i operatiu existent. Inclou: capacitat d\'intercanvi de dades, compatibilitat amb protocols estàndard (HL7 FHIR, DICOM), possibilitat d\'integració via API, connectivitat amb plataformes externes.',
     questions: ['Quins protocols estàndard utilitza?', 'Com s\'integra amb el sistema d\'informació clínic?', 'Genera dependències tecnològiques tancades?'],
@@ -335,7 +342,7 @@ const SLL_CRITERIA = [
   {
     key: 'impacte',
     label: '5. Impacte',
-    icon: '📈',
+    icon: IconTrendUp,
     color: 'purple',
     description: 'Verifica que la solució produeix millores objectives i mesurables. Inclou: millora de l\'autonomia personal, reducció de càrrega assistencial, increment de seguretat percebuda, optimització de processos, millora de qualitat de vida, eficiència operativa.',
     questions: ['Quines millores concretes i mesurables genera?', 'L\'impacte està sustentat en evidència?', 'Quin és el retorn econòmic i social estimat?'],
@@ -343,7 +350,7 @@ const SLL_CRITERIA = [
   {
     key: 'escalabilitat',
     label: '6. Escalabilitat',
-    icon: '🚀',
+    icon: IconRocket,
     color: 'teal',
     description: 'Determina si la solució pot transcendir l\'àmbit experimental i desplegar-se de forma estructural. Inclou: viabilitat econòmica, sostenibilitat operativa, adaptabilitat territorial, requeriments de manteniment, capacitat de transferència al sistema públic.',
     questions: ['Quin és el cost de manteniment anual?', 'Es pot replicar a altres centres sense perdre eficàcia?', 'Té potencial d\'incorporació al sistema públic?'],
@@ -351,10 +358,10 @@ const SLL_CRITERIA = [
 ]
 
 const DICTAMENS = [
-  { value: 'favorable',    label: '✅ Favorable',    color: 'border-green-400 bg-green-50 text-green-800'  },
-  { value: 'condicionada', label: '⚠️ Condicionada', color: 'border-yellow-400 bg-yellow-50 text-yellow-800' },
-  { value: 'reformulacio', label: '🔄 Reformulació', color: 'border-orange-400 bg-orange-50 text-orange-800' },
-  { value: 'no_validacio', label: '❌ No validació', color: 'border-red-400 bg-red-50 text-red-800'          },
+  { value: 'favorable',    label: 'Favorable',    icon: Check,     color: 'border-green-400 bg-green-50 text-green-800'  },
+  { value: 'condicionada', label: 'Condicionada', icon: AlertCircle, color: 'border-yellow-400 bg-yellow-50 text-yellow-800' },
+  { value: 'reformulacio', label: 'Reformulació', icon: RotateCcw, color: 'border-orange-400 bg-orange-50 text-orange-800' },
+  { value: 'no_validacio', label: 'No validació', icon: X,         color: 'border-red-400 bg-red-50 text-red-800'          },
 ]
 
 function ValidationTab({ project, onSave }) {
@@ -414,7 +421,7 @@ function ValidationTab({ project, onSave }) {
             <button type="button" onClick={() => setExpanded(isOpen ? null : c.key)}
               className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
               <div className="flex items-center gap-3">
-                <span className="text-xl">{c.icon}</span>
+                <span className={CRITERI_COLOR[c.color] || 'text-gray-400'}><c.icon size={20} /></span>
                 <div className="text-left">
                   <p className="text-sm font-semibold text-gray-800">{c.label}</p>
                   {!isOpen && text && <p className="text-xs text-gray-400 truncate max-w-xs">{text}</p>}
@@ -475,10 +482,10 @@ function ValidationTab({ project, onSave }) {
         <div className="grid grid-cols-2 gap-2">
           {DICTAMENS.map(d => (
             <button key={d.value} type="button" onClick={() => set('dictamen', d.value)}
-              className={clsx('p-3 rounded-xl border-2 text-sm font-semibold transition-all text-left',
+              className={clsx('p-3 rounded-xl border-2 text-sm font-semibold transition-all text-left flex items-center gap-2',
                 data.dictamen === d.value ? d.color : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
               )}>
-              {d.label}
+              <d.icon size={15} />{d.label}
             </button>
           ))}
         </div>
@@ -495,10 +502,10 @@ function ValidationTab({ project, onSave }) {
 
 // ─── Timeline Tab ─────────────────────────────────────────────────────────────
 const EVENT_ICONS = {
-  milestone:   { icon: '🏁', label: 'Fita',        color: 'bg-purple-100 text-purple-700' },
-  meeting:     { icon: '📅', label: 'Reunió',       color: 'bg-blue-100 text-blue-700'   },
-  deliverable: { icon: '📦', label: 'Lliurable',    color: 'bg-teal-100 text-teal-700'   },
-  note:        { icon: '📝', label: 'Nota',          color: 'bg-gray-100 text-gray-600'   },
+  milestone:   { icon: IconFlagMark, label: 'Fita',        color: 'bg-purple-100 text-purple-700' },
+  meeting:     { icon: IconCalendar, label: 'Reunió',       color: 'bg-blue-100 text-blue-700'   },
+  deliverable: { icon: IconPackage,  label: 'Lliurable',    color: 'bg-teal-100 text-teal-700'   },
+  note:        { icon: IconNote,     label: 'Nota',          color: 'bg-gray-100 text-gray-600'   },
 }
 
 function TimelineTab({ project, history, onAddEvent, onDeleteEvent }) {
@@ -540,9 +547,9 @@ function TimelineTab({ project, history, onAddEvent, onDeleteEvent }) {
             <div className="flex gap-2">
               {Object.entries(EVENT_ICONS).map(([key, cfg]) => (
                 <button key={key} type="button" onClick={() => setForm(f => ({ ...f, type: key }))}
-                  className={clsx('flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                  className={clsx('flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center justify-center gap-1.5',
                     form.type === key ? 'bg-althaia-600 text-white border-althaia-600' : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
-                  )}>{cfg.icon} {cfg.label}</button>
+                  )}><cfg.icon size={13} /> {cfg.label}</button>
               ))}
             </div>
           </div>
@@ -580,10 +587,10 @@ function TimelineTab({ project, history, onAddEvent, onDeleteEvent }) {
             return (
               <div key={i} className="flex gap-4">
                 <div className="flex flex-col items-center">
-                  <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0',
+                  <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
                     isPhase ? (phc?.bg || 'bg-gray-100') : (evCfg?.color || 'bg-gray-100')
                   )}>
-                    {isPhase ? (ph?.icon || '📍') : (evCfg?.icon || '📍')}
+                    {(() => { const DotIcon = isPhase ? (ph?.icon || MapPin) : (evCfg?.icon || MapPin); return <DotIcon size={17} /> })()}
                   </div>
                   {!isLast && <div className="w-0.5 flex-1 bg-gray-100 my-1" />}
                 </div>
@@ -877,7 +884,7 @@ function FeedbackTab({ project, feedbackList, onAdd, onDelete }) {
         return (
           <div key={f.id} className={clsx('border rounded-xl p-4', meta.color)}>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-xs font-bold border">👤</div>
+              <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-gray-400 border"><UserIcon size={13} /></div>
               <div>
                 <p className="text-xs font-semibold text-gray-800">{f.user_id ? `Usuari #${f.user_id}` : 'Anònim'}</p>
                 <p className="text-xs text-gray-400">{f.created_at}</p>
@@ -989,24 +996,28 @@ export default function ProjectDetailPage() {
 
         {/* Fila 1: icona + títol + badges */}
         <div className="flex items-start gap-4 mb-4">
-          <div className={clsx('w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0', pc?.bg)}>
-            {phase?.icon}
+          <div className={clsx('w-14 h-14 rounded-2xl flex items-center justify-center shrink-0', pc?.bg, pc?.text)}>
+            {phase?.icon && <phase.icon size={28} />}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold text-gray-900 leading-tight mb-2">{project.title}</h2>
             <div className="flex flex-wrap items-center gap-2">
-              <span className={clsx('badge', pc?.bg, pc?.text)}>{phase?.icon} {phase?.name}</span>
+              <span className={clsx('badge gap-1', pc?.bg, pc?.text)}>{phase?.icon && <phase.icon size={13} />} {phase?.name}</span>
               <StatusBadge status={project.status} />
               <PriorityBadge priority={project.priority} />
-              {project.dictamen && (
-                <span className={clsx('badge text-xs',
-                  project.dictamen === 'favorable'    ? 'bg-green-100 text-green-700' :
-                  project.dictamen === 'condicionada' ? 'bg-yellow-100 text-yellow-700' :
-                  project.dictamen === 'reformulacio' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
-                )}>
-                  {project.dictamen === 'favorable' ? '✅' : project.dictamen === 'condicionada' ? '⚠️' : project.dictamen === 'reformulacio' ? '🔄' : '❌'} {project.dictamen}
-                </span>
-              )}
+              {project.dictamen && (() => {
+                const d = DICTAMENS.find(x => x.value === project.dictamen)
+                if (!d) return null
+                return (
+                  <span className={clsx('badge text-xs gap-1',
+                    d.value === 'favorable'    ? 'bg-green-100 text-green-700' :
+                    d.value === 'condicionada' ? 'bg-yellow-100 text-yellow-700' :
+                    d.value === 'reformulacio' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                  )}>
+                    <d.icon size={12} /> {d.label}
+                  </span>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -1070,7 +1081,9 @@ export default function ProjectDetailPage() {
                     curr ? `${phc.bg} ring-2 ring-offset-1 ring-althaia-400` :
                     done ? 'bg-green-50' : 'bg-gray-50'
                   )}>
-                    <span className="text-sm">{done ? '✓' : ph.icon}</span>
+                    <span className={curr ? phc.text : done ? 'text-green-600' : 'text-gray-300'}>
+                      {done ? <Check size={14} /> : <ph.icon size={14} />}
+                    </span>
                     <span className={clsx('text-xs font-medium', curr ? phc.text : done ? 'text-green-600' : 'text-gray-300')}>
                       {ph.name.slice(0, 4)}.
                     </span>
@@ -1113,7 +1126,7 @@ export default function ProjectDetailPage() {
                         </div>
                       ))}
                       {tasks.filter(t => t.status !== 'completed').length === 0 && (
-                        <p className="text-xs text-gray-400">Totes les tasques completades ✓</p>
+                        <p className="text-xs text-gray-400 flex items-center gap-1"><Check size={12} />Totes les tasques completades</p>
                       )}
                     </div>
                   </div>
@@ -1175,16 +1188,15 @@ export default function ProjectDetailPage() {
                         : 'border-gray-200 bg-white'
                     )}>
                       <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-900">
-                          {project.wizard_selected?.id === idea.id && '⭐ '}
+                        <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                          {project.wizard_selected?.id === idea.id && <Star size={14} className="text-amber-400 fill-amber-400" />}
                           {idea.title}
                         </h4>
-                        {idea.ai_related && <span className="badge bg-violet-100 text-violet-700 text-xs">🤖 IA</span>}
                       </div>
                       {idea.description && <p className="text-xs text-gray-500 mb-3">{idea.description}</p>}
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        {idea.pros && <div className="bg-green-50 rounded-lg p-2 text-green-700">✅ {idea.pros.slice(0, 80)}</div>}
-                        {idea.cons && <div className="bg-red-50 rounded-lg p-2 text-red-600">❌ {idea.cons.slice(0, 80)}</div>}
+                        {idea.pros && <div className="bg-green-50 rounded-lg p-2 text-green-700 flex items-start gap-1"><Check size={13} className="shrink-0 mt-0.5" />{idea.pros.slice(0, 80)}</div>}
+                        {idea.cons && <div className="bg-red-50 rounded-lg p-2 text-red-600 flex items-start gap-1"><X size={13} className="shrink-0 mt-0.5" />{idea.cons.slice(0, 80)}</div>}
                       </div>
                     </div>
                   ))}
@@ -1196,7 +1208,6 @@ export default function ProjectDetailPage() {
                   <div key={idea.id} className="border border-gray-200 rounded-xl p-4">
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="text-sm font-semibold text-gray-900">{idea.title}</h4>
-                      {idea.ai_related && <span className="badge bg-violet-100 text-violet-700 text-xs">🤖 IA</span>}
                     </div>
                     <p className="text-xs text-gray-500 mb-3">{idea.description}</p>
                     <div className="grid grid-cols-2 gap-3 text-xs mb-3">

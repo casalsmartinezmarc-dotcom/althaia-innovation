@@ -315,7 +315,7 @@ export default function IdeasBankPage() {
                                 ? r === 'acceptada' ? 'bg-blue-600 text-white border-blue-600' : 'bg-red-500 text-white border-red-500'
                                 : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
                             )}>
-                            {r === 'acceptada' ? '✓ Acceptar' : '✗ Descartar'}
+                            {r === 'acceptada' ? <><Check size={13} className="inline mr-1" />Acceptar</> : <><X size={13} className="inline mr-1" />Descartar</>}
                           </button>
                         ))}
                       </div>

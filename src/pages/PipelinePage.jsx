@@ -44,7 +44,7 @@ function PhaseColumn({ phase }) {
       {/* Phase header */}
       <div className={clsx('rounded-xl p-3 mb-1', pc.bg)}>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-lg">{phase.icon}</span>
+          <span className={pc.text}><phase.icon size={18} /></span>
           <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', pc.bg, pc.text, 'border', pc.border)}>
             {phaseProjects.length}
           </span>
@@ -87,7 +87,7 @@ export default function PipelinePage() {
             return (
               <div key={ph.id} className="flex items-center flex-1">
                 <div className={clsx('flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-lg', pc.bg)}>
-                  <span className="text-base">{ph.icon}</span>
+                  <span className={pc.text}><ph.icon size={16} /></span>
                   <span className={clsx('text-xs font-bold', pc.text)}>{ph.name.slice(0,4)}.</span>
                 </div>
                 {i < PHASES.length - 1 && <ArrowRight size={14} className="text-gray-300 shrink-0 mx-0.5" />}

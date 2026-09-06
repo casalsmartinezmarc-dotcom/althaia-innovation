@@ -1,12 +1,17 @@
+import {
+  IconSearch, IconBulb, IconTarget, IconDraft,
+  IconFlask, IconChartBars, IconRocket, IconTrendUp,
+} from '../components/icons/CustomIcons.jsx'
+
 export const PHASES = [
-  { id: 1, name: 'Detecció',       icon: '🔍', color: 'purple',  desc: 'Registre de necessitats clíniques' },
-  { id: 2, name: 'Generació',      icon: '💡', color: 'pink',    desc: 'Idees i propostes de solució' },
-  { id: 3, name: 'Selecció',       icon: '🎯', color: 'blue',    desc: 'Priorització i matriu de decisió' },
-  { id: 4, name: 'Disseny',        icon: '📐', color: 'teal',    desc: 'Definició detallada del projecte' },
-  { id: 5, name: 'Pilot',          icon: '🧪', color: 'orange',  desc: 'Prova pilot controlada' },
-  { id: 6, name: 'Avaluació',      icon: '📊', color: 'violet',  desc: 'Anàlisi de resultats del pilot' },
-  { id: 7, name: 'Implementació',  icon: '🚀', color: 'amber',   desc: 'Desplegament a l\'organització' },
-  { id: 8, name: 'Seguiment',      icon: '📈', color: 'sky',     desc: 'Monitoratge continu' },
+  { id: 1, name: 'Detecció',       icon: IconSearch,    color: 'purple',  desc: 'Registre de necessitats clíniques' },
+  { id: 2, name: 'Generació',      icon: IconBulb,      color: 'pink',    desc: 'Idees i propostes de solució' },
+  { id: 3, name: 'Selecció',       icon: IconTarget,    color: 'blue',    desc: 'Priorització i matriu de decisió' },
+  { id: 4, name: 'Disseny',        icon: IconDraft,     color: 'teal',    desc: 'Definició detallada del projecte' },
+  { id: 5, name: 'Pilot',          icon: IconFlask,     color: 'orange',  desc: 'Prova pilot controlada' },
+  { id: 6, name: 'Avaluació',      icon: IconChartBars, color: 'violet',  desc: 'Anàlisi de resultats del pilot' },
+  { id: 7, name: 'Implementació',  icon: IconRocket,    color: 'amber',   desc: 'Desplegament a l\'organització' },
+  { id: 8, name: 'Seguiment',      icon: IconTrendUp,   color: 'sky',     desc: 'Monitoratge continu' },
 ]
 
 export const PHASE_COLORS = {

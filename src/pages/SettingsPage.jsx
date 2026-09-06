@@ -9,6 +9,7 @@ import { dbWrite } from '../lib/dbWrite'
 import {
   Download, Upload, Trash2, Check, AlertTriangle,
   Database, Info, RefreshCw, HardDrive, Wifi, WifiOff,
+  Folder, ListChecks, Calendar, Bell, ArrowRight,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -184,7 +185,7 @@ export default function SettingsPage() {
 
           setImportMsg({
             type: 'ok',
-            text: `✅ Importats ${data.projects.length} projectes a Supabase. Recarregant la pàgina...`,
+            text: `Importats ${data.projects.length} projectes a Supabase. Recarregant la pàgina...`,
           })
         } else {
           // Fallback: localStorage
@@ -194,7 +195,7 @@ export default function SettingsPage() {
           localStorage.setItem(ALERTS_KEY,   JSON.stringify(data.alerts           || []))
           setImportMsg({
             type: 'ok',
-            text: `✅ Importats ${data.projects.length} projectes al navegador. Recarregant...`,
+            text: `Importats ${data.projects.length} projectes al navegador. Recarregant...`,
           })
         }
 
@@ -231,7 +232,7 @@ export default function SettingsPage() {
           <div className="text-sm">
             {hasDB ? (
               <>
-                <p className="font-semibold text-green-900 mb-1">✅ Connectat a Supabase (PostgreSQL)</p>
+                <p className="font-semibold text-green-900 mb-1">Connectat a Supabase (PostgreSQL)</p>
                 <p className="text-green-700 text-xs leading-relaxed">
                   Les dades es guarden automàticament a la base de dades al núvol.
                   Els projectes són accessibles des de qualsevol navegador o dispositiu.
@@ -239,14 +240,14 @@ export default function SettingsPage() {
               </>
             ) : (
               <>
-                <p className="font-semibold text-amber-900 mb-1">⚠️ Sense base de dades — mode localStorage</p>
+                <p className="font-semibold text-amber-900 mb-1">Sense base de dades — mode localStorage</p>
                 <p className="text-amber-700 text-xs leading-relaxed">
                   Les variables <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_URL</code> i{' '}
                   <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> no estan configurades.
                   Les dades es guarden localment al navegador i desapareixeran si neteges la caché o canvies de navegador/dispositiu.
                 </p>
-                <p className="text-amber-700 text-xs mt-1.5">
-                  👉 Consulta <strong>Configuració → Supabase</strong> a Vercel per afegir les variables d'entorn.
+                <p className="text-amber-700 text-xs mt-1.5 flex items-center gap-1">
+                  <ArrowRight size={12} className="shrink-0" /> Consulta <strong>Configuració → Supabase</strong> a Vercel per afegir les variables d'entorn.
                 </p>
               </>
             )}
@@ -265,10 +266,11 @@ export default function SettingsPage() {
               </button>
             </div>
             {dbTest && dbTest !== 'testing' && (
-              <div className={clsx('rounded-lg p-3 text-xs font-mono',
+              <div className={clsx('rounded-lg p-3 text-xs font-mono flex items-start gap-2',
                 dbTest.ok ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
               )}>
-                {dbTest.ok ? '✅ ' : '❌ '}{dbTest.msg}
+                {dbTest.ok ? <Check size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+                <span>{dbTest.msg}</span>
               </div>
             )}
             <p className="text-xs text-gray-400">
@@ -282,13 +284,13 @@ export default function SettingsPage() {
           <Section title="Emmagatzematge local (localStorage)" icon={HardDrive}>
             <div className="grid grid-cols-2 gap-3 mb-4">
               {[
-                { label: 'Projectes',       key: STORAGE_KEY,  icon: '📁' },
-                { label: 'Tasques',         key: TASKS_KEY,    icon: '✅' },
-                { label: 'Timeline events', key: TIMELINE_KEY, icon: '📅' },
-                { label: 'Alertes',         key: ALERTS_KEY,   icon: '🔔' },
+                { label: 'Projectes',       key: STORAGE_KEY,  icon: Folder },
+                { label: 'Tasques',         key: TASKS_KEY,    icon: ListChecks },
+                { label: 'Timeline events', key: TIMELINE_KEY, icon: Calendar },
+                { label: 'Alertes',         key: ALERTS_KEY,   icon: Bell },
               ].map(item => (
                 <div key={item.key} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3">
-                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-althaia-500"><item.icon size={20} /></span>
                   <div>
                     <p className="text-xs font-semibold text-gray-700">{item.label}</p>
                     <p className="text-xs text-gray-400">{storageSize(item.key)} KB</p>
@@ -407,10 +409,10 @@ export default function SettingsPage() {
           <div className="space-y-1 text-xs text-gray-500">
             {[
               ['Frontend',          'React 18 + Vite + Tailwind CSS'],
-              ['Persistència',      hasDB ? '✅ Supabase (PostgreSQL al núvol)' : '⚠️ localStorage (browser local)'],
-              ['Backend propi',     'No connectat (schema.sql disponible)'],
-              ['Desplegament',      'Vercel (estàtic)'],
-              ['Repositori',        'GitHub → casalsmartinezmarc-dotcom/althaia-innovation'],
+              ['Persistència',      hasDB ? 'Supabase (PostgreSQL al núvol)' : 'localStorage (browser local)'],
+              ['Backend d\'escriptura', 'Vercel Serverless Functions (/api/db, /api/login, /api/register)'],
+              ['Desplegament',      'Vercel'],
+              ['Repositori',        'GitHub'],
             ].map(([k, v]) => (
               <div key={k} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
                 <span>{k}</span>

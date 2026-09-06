@@ -68,10 +68,10 @@ export default function ProjectsPage() {
             >
               {/* Phase icon */}
               <span className={clsx(
-                'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg',
-                pc?.bg
+                'w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+                pc?.bg, pc?.text
               )}>
-                {phase?.icon}
+                {phase?.icon && <phase.icon size={18} />}
               </span>
 
               {/* Title + meta */}

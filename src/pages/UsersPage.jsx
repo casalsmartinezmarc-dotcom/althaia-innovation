@@ -166,7 +166,7 @@ export default function UsersPage() {
                     className={clsx('text-xs font-semibold border rounded-lg px-2 py-1.5 cursor-pointer', rs.bg, rs.text, 'border-transparent')}
                   >
                     {ROLE_OPTIONS.map(r => (
-                      <option key={r} value={r}>{r === 'admin' ? '🛡 Admin' : '👤 Professional'}</option>
+                      <option key={r} value={r}>{r === 'admin' ? 'Admin' : 'Professional'}</option>
                     ))}
                   </select>
                 ) : (

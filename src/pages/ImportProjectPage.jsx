@@ -10,6 +10,7 @@ import {
 import clsx from 'clsx'
 import { runPipeline }           from '../lib/import/Pipeline.js'
 import { isSupported }           from '../lib/import/extractors/index.js'
+import { IconBulb } from '../components/icons/CustomIcons.jsx'
 
 // ─── Helpers de formulari ─────────────────────────────────────────────────────
 function FieldGroup({ label, detected, children }) {
@@ -265,8 +266,9 @@ export default function ImportProjectPage() {
             <li>Copia (Ctrl+C o Cmd+C)</li>
             <li>Fes clic al camp de sota i enganxa (Ctrl+V o Cmd+V)</li>
           </ol>
-          <p className="text-xs text-blue-500 mt-2">
-            💡 El motor funciona millor quan el document té seccions clarament identificades (títols, encapçalaments).
+          <p className="text-xs text-blue-500 mt-2 flex items-start gap-1.5">
+            <IconBulb size={14} className="shrink-0 mt-0.5" />
+            <span>El motor funciona millor quan el document té seccions clarament identificades (títols, encapçalaments).</span>
           </p>
         </div>
 

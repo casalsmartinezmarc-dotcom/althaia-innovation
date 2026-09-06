@@ -4,9 +4,10 @@ import Layout from '../components/Layout/Layout'
 import { useApp } from '../context/AppContext'
 import { PHASES, SERVICES } from '../data/constants'
 import {
-  ChevronLeft, ChevronRight, Check, Save,
+  ChevronLeft, ChevronRight, Check, Save, X, CheckCircle2, Circle,
   Search, Lightbulb, FlaskConical, Wrench, BarChart2, Flag,
 } from 'lucide-react'
+import { IconPulse, IconCoin, IconBuilding, IconSmile } from '../components/icons/CustomIcons.jsx'
 import clsx from 'clsx'
 
 const STEPS = [
@@ -83,12 +84,12 @@ function StepIcon({ step }) {
   return Icon ? <Icon size={18} className="text-althaia-600" /> : null
 }
 
-function ScoreSlider({ label, value, onChange }) {
+function ScoreSlider({ icon: Icon, label, value, onChange }) {
   const color = value >= 8 ? 'bg-green-500' : value >= 5 ? 'bg-althaia-500' : 'bg-orange-400'
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">{Icon && <Icon size={15} className="text-gray-400" />}{label}</label>
         <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full text-white', color)}>{value}/10</span>
       </div>
       <input type="range" min={1} max={10} value={value}
@@ -439,7 +440,7 @@ export default function NewProjectPage() {
                     <button key={String(v)} type="button" onClick={() => set('digital_twin', v)}
                       className={clsx('px-5 py-2 rounded-lg text-sm font-medium border transition-all',
                         form.digital_twin === v ? 'bg-althaia-600 text-white border-althaia-600' : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
-                      )}>{v ? '✅ Sí' : '❌ No'}</button>
+                      )}>{v ? <><Check size={13} className="inline mr-1" />Sí</> : <><X size={13} className="inline mr-1" />No</>}</button>
                   ))}
                 </div>
                 {form.digital_twin && (
@@ -543,10 +544,10 @@ export default function NewProjectPage() {
             <>
               <p className="text-sm text-gray-500">Valora l'impacte esperat de 1 (mínim) a 10 (màxim).</p>
               <div className="space-y-4">
-                <ScoreSlider label="🏥 Impacte Clínic"        value={form.impact.clinical}       onChange={v => setImpact('clinical', v)} />
-                <ScoreSlider label="💶 Impacte Econòmic"       value={form.impact.economic}       onChange={v => setImpact('economic', v)} />
-                <ScoreSlider label="🏢 Impacte Organitzatiu"   value={form.impact.organizational}  onChange={v => setImpact('organizational', v)} />
-                <ScoreSlider label="😊 Experiència Pacient"    value={form.impact.patient_exp}    onChange={v => setImpact('patient_exp', v)} />
+                <ScoreSlider icon={IconPulse}    label="Impacte Clínic"        value={form.impact.clinical}       onChange={v => setImpact('clinical', v)} />
+                <ScoreSlider icon={IconCoin}     label="Impacte Econòmic"       value={form.impact.economic}       onChange={v => setImpact('economic', v)} />
+                <ScoreSlider icon={IconBuilding} label="Impacte Organitzatiu"   value={form.impact.organizational}  onChange={v => setImpact('organizational', v)} />
+                <ScoreSlider icon={IconSmile}    label="Experiència Pacient"    value={form.impact.patient_exp}    onChange={v => setImpact('patient_exp', v)} />
               </div>
               <div>
                 <label className="label">Projecte relacionat amb IA</label>
@@ -555,7 +556,7 @@ export default function NewProjectPage() {
                     <button key={String(v)} type="button" onClick={() => set('ai_related', v)}
                       className={clsx('px-6 py-2 rounded-lg text-sm font-medium border transition-all',
                         form.ai_related === v ? 'bg-althaia-600 text-white border-althaia-600' : 'bg-white text-gray-500 border-gray-200 hover:border-althaia-300'
-                      )}>{v ? '✅ Sí' : '❌ No'}</button>
+                      )}>{v ? <><Check size={13} className="inline mr-1" />Sí</> : <><X size={13} className="inline mr-1" />No</>}</button>
                   ))}
                 </div>
               </div>
@@ -573,7 +574,7 @@ export default function NewProjectPage() {
                   <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Servei</span><span className="font-semibold text-gray-900">{form.service || '—'}</span></div>
                   <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Responsable</span><span className="text-gray-700">{form.owner_name || '—'}</span></div>
                   <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Prioritat</span><span className="capitalize text-gray-700">{form.priority}</span></div>
-                  <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Fase entrada</span><span className="text-gray-700">{PHASES[form.current_phase - 1]?.icon} {PHASES[form.current_phase - 1]?.name}</span></div>
+                  <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Fase entrada</span><span className="text-gray-700 inline-flex items-center gap-1">{PHASES[form.current_phase - 1]?.icon && (() => { const PhIcon = PHASES[form.current_phase - 1].icon; return <PhIcon size={14} /> })()} {PHASES[form.current_phase - 1]?.name}</span></div>
                   <div><span className="text-gray-400 text-xs uppercase tracking-wide block">Pressupost</span><span className="text-gray-700">{form.budget ? `€${Number(form.budget).toLocaleString()}` : '—'}</span></div>
                 </div>
 
@@ -628,7 +629,7 @@ export default function NewProjectPage() {
                       ['Escalabilitat SISCU',     form.scalability_plan],
                     ].map(([label, val]) => (
                       <div key={label} className={clsx('flex items-center gap-1.5', val ? 'text-green-600' : 'text-gray-300')}>
-                        <span>{val ? '✓' : '○'}</span><span>{label}</span>
+                        {val ? <CheckCircle2 size={14} /> : <Circle size={14} />}<span>{label}</span>
                       </div>
                     ))}
                   </div>
