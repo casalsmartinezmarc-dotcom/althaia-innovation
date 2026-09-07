@@ -12,7 +12,7 @@
 // Vercel Hobby: extends default 10s limit up to 60s
 export const config = { maxDuration: 60 }
 
-const GEMINI_MODEL   = 'gemini-2.5-flash'
+const GEMINI_MODEL   = 'gemini-3.6-flash'
 const MAX_RETRIES    = 4                  // 4 attempts total for 503 overload
 const BACKOFF_MS     = [0, 3000, 6000, 10000]
 const MAX_TEXT_CHARS = 12_000             // ~3k tokens
